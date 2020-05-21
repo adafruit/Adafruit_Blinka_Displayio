@@ -5,12 +5,14 @@
 import os
 import digitalio
 import time
-from PIL import Image, ImageDraw
+import struct
+import numpy
+from collections import namedtuple
+from PIL import Image, ImageDraw, ImagePalette
 
 """
 import asyncio
 import signal
-import struct
 import subprocess
 """
 
@@ -29,6 +31,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 _displays = []
 _groups = []
 
+Rectangle = namedtuple("Rectangle", "x1 y1 x2 y2")
 
 class _DisplayioSingleton:
     def __init__(self):
@@ -75,7 +78,7 @@ class Bitmap:
             raise NotImplementedError("Invalid bits per value")
 
         self._data = (width * height) * [0]
-        self._dirty_area = {"x1": 0, "x2": width, "y1": 0, "y2": height}
+        self._dirty_area = Rectangle(0, 0, width, height)
 
     def __getitem__(self, index):
         """
@@ -101,29 +104,29 @@ class Bitmap:
             x = index % self._width
             y = index // self._width
         self._data[index] = value
-        if self._dirty_area["x1"] == self._dirty_area["x2"]:
-            self._dirty_area["x1"] = x
-            self._dirty_area["x2"] = x + 1
-            self._dirty_area["y1"] = y
-            self._dirty_area["y2"] = y + 1
+        if self._dirty_area.x1 == self._dirty_area.x2:
+            self._dirty_area.x1 = x
+            self._dirty_area.x2 = x + 1
+            self._dirty_area.y1 = y
+            self._dirty_area.y2 = y + 1
         else:
-            if x < self._dirty_area["x1"]:
-                self._dirty_area["x1"] = x
-            elif x >= self._dirty_area["x2"]:
-                self._dirty_area["x2"] = x + 1
-            if y < self._dirty_area["y1"]:
-                self._dirty_area["y1"] = y
-            elif y >= self._dirty_area["y2"]:
-                self._dirty_area["y2"] = y + 1
+            if x < self._dirty_area.x1:
+                self._dirty_area.x1 = x
+            elif x >= self._dirty_area.x2:
+                self._dirty_area.x2 = x + 1
+            if y < self._dirty_area.y1:
+                self._dirty_area.y1 = y
+            elif y >= self._dirty_area.y2:
+                self._dirty_area.y2 = y + 1
 
     def _finish_refresh(self):
-        self._dirty_area["x1"] = 0
-        self._dirty_area["x2"] = 0
+        self._dirty_area.x1 = 0
+        self._dirty_area.x2 = 0
 
     def fill(self, value):
         """Fills the bitmap with the supplied palette index value."""
         self._data = (self._width * self._height) * [value]
-        self._dirty_area = {"x1": 0, "x2": self._width, "y1": 0, "y2": self._height}
+        self._dirty_area = Rectangle(0, 0, self._width, self._height)
 
     @property
     def width(self):
@@ -268,9 +271,9 @@ class Display:
         The initialization sequence should always leave the display memory access inline with the scan of the display to minimize tearing artifacts.
         """
         self._bus = display_bus
-        self._set_column_command = 0x2A
-        self._set_row_command = 0x2B
-        self._write_ram_command = 0x2C
+        self._set_column_command = set_column_command
+        self._set_row_command = set_row_command
+        self._write_ram_command = write_ram_command
         self._brightness_command = brightness_command
         self._data_as_commands = data_as_commands
         self._single_byte_bounds = single_byte_bounds
@@ -283,23 +286,23 @@ class Display:
         self._brightness = brightness
         self._auto_refresh = auto_refresh
         self._initialize(init_sequence)
+        self._buffer = Image.new("RGB", (width, height))
+        self._subrectangles = []
+        self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
+        self._groups = []
         _displays.append(self)
+        if self._auto_refresh:
+            self.refresh()
 
     def _initialize(self, init_sequence):
         i = 0
         while i < len(init_sequence):
-            command = bytes([init_sequence[i]])
+            command = init_sequence[i]
             data_size = init_sequence[i + 1]
             delay = (data_size & 0x80) > 0
             data_size &= ~0x80
             data_byte = init_sequence[i + 2]
-            if self._single_byte_bounds:
-                data = command + init_sequence[i + 2 : i + 2 + data_size]
-                self._bus.send(True, data, toggle_every_byte=True)
-            else:
-                self._bus.send(True, command, toggle_every_byte=True)
-                if data_size > 0:
-                    self._bus.send(False, init_sequence[i + 2 : i + 2 + data_size])
+            self._write(command, init_sequence[i + 2 : i + 2 + data_size])
             delay_time_ms = 10
             if delay:
                 data_size += 1
@@ -309,6 +312,13 @@ class Display:
             time.sleep(delay_time_ms / 1000)
             i += 2 + data_size
 
+    def _write(self, command, data):
+        if self._single_byte_bounds:
+            self._bus.send(True, bytes([command]) + data, toggle_every_byte=True)
+        else:
+            self._bus.send(True, bytes([command]), toggle_every_byte=True)
+            self._bus.send(False, data)
+
     def _release(self):
         self._bus.release()
         self._bus = None
@@ -316,7 +326,19 @@ class Display:
     def show(self, group):
         """Switches to displaying the given group of layers. When group is None, the default CircuitPython terminal will be shown.
         """
-        pass
+        self._groups.append(group)
+
+    def _group_to_buffer(self, group):
+        """ go through any children and call this function then add group to buffer"""
+        for layer_number in range(len(group.layers)):
+            layer = group.layers[layer_number]
+            if isinstance(layer, Group):
+                self._group_to_buffer(layer)
+            elif isinstance(layer, TileGrid):
+                # Get the TileGrid Info and draw to buffer
+                pass
+            else:
+                raise TypeError("Invalid layer type found in group")
 
     def refresh(self, *, target_frames_per_second=60, minimum_frames_per_second=1):
         """When auto refresh is off, waits for the target frame rate and then refreshes the display, returning True. If the call has taken too long since the last refresh call for the given target frame rate, then the refresh returns False immediately without updating the screen to hopefully help getting caught up.
@@ -325,7 +347,45 @@ class Display:
 
         When auto refresh is on, updates the display immediately. (The display will also update without calls to this.)
         """
-        pass
+        
+        # Go through groups and and add each to buffer
+        #for group in self._groups:
+            
+        
+        # Eventually calculate dirty rectangles here
+        self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
+        
+        for area in self._subrectangles:
+            self._refresh_display_area(area)
+        
+        if self._auto_refresh:
+            self.refresh()
+
+    def _refresh_display_area(self, rectangle):
+        """Loop through dirty rectangles and redraw that area."""
+        """Read or write a block of data."""
+        data = numpy.array(self._buffer.crop(rectangle).convert("RGB")).astype("uint16")
+        color = (
+            ((data[:, :, 0] & 0xF8) << 8)
+            | ((data[:, :, 1] & 0xFC) << 3)
+            | (data[:, :, 2] >> 3)
+        )
+        
+        pixels = list(numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist())
+        
+        self._write(
+            self._set_column_command,
+            self._encode_pos(rectangle.x1 + self._colstart, rectangle.x2 + self._colstart)
+        )
+        self._write(
+            self._set_row_command,
+            self._encode_pos(rectangle.y1 + self._rowstart, rectangle.y2 + self._rowstart)
+        )
+        self._write(self._write_ram_command, pixels)
+
+    def _encode_pos(self, x, y):
+        """Encode a postion into bytes."""
+        return struct.pack(self._bounds_encoding, x, y)
 
     def fill_row(self, y, buffer):
         pass
@@ -497,10 +557,10 @@ class FourWire:
             self._reset.value = True
             time.sleep(0.001)
 
-    def send(self, command, data, *, toggle_every_byte=False):
+    def send(self, is_command, data, *, toggle_every_byte=False):
         while self._spi.try_lock():
             pass
-        self._dc.value = not command
+        self._dc.value = not is_command
         if toggle_every_byte:
             for byte in data:
                 self._spi.write(bytes([byte]))
@@ -646,17 +706,17 @@ class OnDisplayBitmap:
     These load times may result in frame tearing where only part of the image is visible."""
 
     def __init__(self, file):
-        pass
+        self._image = Image.open(file)
 
     @property
     def width(self):
         """Width of the bitmap. (read only)"""
-        pass
+        return self._image.width
 
     @property
     def height(self):
         """Height of the bitmap. (read only)"""
-        pass
+        return self._image.height
 
 
 class Palette:
@@ -665,6 +725,7 @@ class Palette:
     def __init__(self, color_count):
         """Create a Palette object to store a set number of colors."""
         self._needs_refresh = False
+        
         self._colors = []
         for _ in range(color_count):
             self._colors.append(self._make_color(0))
@@ -673,10 +734,6 @@ class Palette:
         color = {
             "transparent": False,
             "rgb888": 0,
-            "rgb565": 0,
-            "luma": 0,
-            "chroma": 0,
-            "hue": 0,
         }
         color_converter = ColorConverter()
         if isinstance(value, (tuple, list, bytes, bytearray)):
@@ -687,10 +744,6 @@ class Palette:
         else:
             raise TypeError("Color buffer must be a buffer, tuple, list, or int")
         color["rgb888"] = value
-        color["rgb565"] = color_converter._compute_rgb565(value)
-        color["chroma"] = color_converter._compute_chroma(value)
-        color["luma"] = color_converter._compute_luma(value)
-        color["hue"] = color_converter._compute_hue(value)
         self._needs_refresh = True
 
         return color
@@ -715,6 +768,15 @@ class Palette:
 
     def make_opaque(self, palette_index):
         self._colors[palette_index].transparent = False
+
+    def _pil_palette(self):
+        "Generate a Pillow ImagePalette and return it"
+        palette = []
+        for channel in range(3):
+            for color in self._colors:
+                palette.append(color >> (8 * (2 - channel)) & 0xFF)
+            
+        return ImagePalette(mode='RGB', palette=palette, size=self._color_count)
 
 
 class ParallelBus:
@@ -742,7 +804,7 @@ class ParallelBus:
         pass
 
 
-class Shape:
+class Shape(Bitmap):
     """Create a Shape object with the given fixed size. Each pixel is one bit and is stored by the column
     boundaries of the shape on each row. Each row’s boundary defaults to the full row.
     """
@@ -781,19 +843,32 @@ class TileGrid:
 
         tile_width and tile_height match the height of the bitmap by default.
         """
+        if not isinstance(bitmap, (Bitmap, OnDiskBitmap, Shape)):
+            raise ValueError("Unsupported Bitmap type")
         self._bitmap = bitmap
+        bitmap_width = bitmap.width
+        bitmap_height = bitmap.height
+        
+        if not isinstance(pixel_shader, (ColorConverter, Palette)):
+            raise ValueError("Unsupported Pixel Shader type")
         self._pixel_shader = pixel_shader
         self_hidden = False
         self._x = x
         self._y = y
-        self._width = width
-        self._height = height
+        self._width = width # Number of Tiles Wide
+        self._height = height # Number of Tiles High
         if tile_width is None:
-            tile_width = width
+            tile_width = bitmap_width
         if tile_height is None:
-            tile_height = height
+            tile_height = bitmap_height
+        if bitmap_width % tile_width != 0:
+            raise ValueError("Tile width must exactly divide bitmap width")
         self._tile_width = tile_width
+        if bitmap_height % tile_height != 0:
+            raise ValueError("Tile height must exactly divide bitmap height")
         self._tile_height = tile_height
+        self._tiles = (self._width * self._height) * [default_tile]
+
 
     @property
     def hidden(self):
@@ -859,15 +934,20 @@ class TileGrid:
         an x,y tuple or an int equal to ``y * width + x``'.
         """
         if isinstance(index, (tuple, list)):
-            index = index[1] * self._width + index[0]
-        return self._data[index]
+            x = index[0]
+            y = index[1]
+            index = y * self._width + x
+        elif ininstance(index, int):
+            x = index % self._width
+            y = index // self._width
+        if x > self._width or y > self._height:
+            raise ValueError("Tile index out of bounds")
+        return self._tiles[index]
 
     def __setitem__(self, index, value):
         """Sets the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``.
         """
-        if self._read_only:
-            raise RuntimeError("Read-only object")
         if isinstance(index, (tuple, list)):
             x = index[0]
             y = index[1]
@@ -875,4 +955,8 @@ class TileGrid:
         elif ininstance(index, int):
             x = index % self._width
             y = index // self._width
-        self._data[index] = value
+        if x > width or y > self._height or index > len(self._tiles):
+            raise ValueError("Tile index out of bounds")
+        if not 0 <= value <= 255:
+            raise ValueError("Tile value out of bounds")
+        self._tiles[index] = value
