@@ -6,6 +6,7 @@ import os
 import digitalio
 import time
 import struct
+import threading
 import numpy
 from collections import namedtuple
 from PIL import Image, ImageDraw, ImagePalette
@@ -46,7 +47,6 @@ def release_displays():
     for _disp in _displays:
         _disp._release()
     _displays.clear()
-
 
 class Bitmap:
     """Stores values of a certain size in a 2D array"""
@@ -206,6 +206,9 @@ class ColorConverter:
         else:
             return self._compute_rgb565(color)
 
+    def _pil_palette(self):
+        return None
+
     @property
     def dither(self):
         "When true the color converter dithers the output by adding random noise when truncating to display bitdepth"
@@ -289,10 +292,11 @@ class Display:
         self._buffer = Image.new("RGB", (width, height))
         self._subrectangles = []
         self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
-        self._groups = []
+        self._current_group = None
         _displays.append(self)
+        self._refresh_thread = None
         if self._auto_refresh:
-            self.refresh()
+            self.auto_refresh = True
 
     def _initialize(self, init_sequence):
         i = 0
@@ -326,19 +330,7 @@ class Display:
     def show(self, group):
         """Switches to displaying the given group of layers. When group is None, the default CircuitPython terminal will be shown.
         """
-        self._groups.append(group)
-
-    def _group_to_buffer(self, group):
-        """ go through any children and call this function then add group to buffer"""
-        for layer_number in range(len(group.layers)):
-            layer = group.layers[layer_number]
-            if isinstance(layer, Group):
-                self._group_to_buffer(layer)
-            elif isinstance(layer, TileGrid):
-                # Get the TileGrid Info and draw to buffer
-                pass
-            else:
-                raise TypeError("Invalid layer type found in group")
+        self._current_group = group
 
     def refresh(self, *, target_frames_per_second=60, minimum_frames_per_second=1):
         """When auto refresh is off, waits for the target frame rate and then refreshes the display, returning True. If the call has taken too long since the last refresh call for the given target frame rate, then the refresh returns False immediately without updating the screen to hopefully help getting caught up.
@@ -347,18 +339,23 @@ class Display:
 
         When auto refresh is on, updates the display immediately. (The display will also update without calls to this.)
         """
-        
         # Go through groups and and add each to buffer
-        #for group in self._groups:
-            
-        
+        if self._current_group is not None:
+            buffer = Image.new("RGB", (self._width, self._height))
+            # Recursively have everything draw to the image
+            self._current_group._fill_area(buffer)
+            # save image to buffer (or probably refresh buffer so we can compare)
+            self._buffer.paste(buffer)
+        print("refreshing")
+        time.sleep(1)
         # Eventually calculate dirty rectangles here
         self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
         
         for area in self._subrectangles:
             self._refresh_display_area(area)
-        
-        if self._auto_refresh:
+
+    def _refresh_loop(self):
+        while self._auto_refresh:
             self.refresh()
 
     def _refresh_display_area(self, rectangle):
@@ -397,6 +394,14 @@ class Display:
     @auto_refresh.setter
     def auto_refresh(self, value):
         self._auto_refresh = value
+        if self._refresh_thread is None:
+            self._refresh_thread = threading.Thread(target=self._refresh_loop, daemon=True)
+        if value and not self._refresh_thread.is_alive():
+            # Start the thread
+            self._refresh_thread.start()
+        elif not value and self._refresh_thread.is_alive():
+            # Stop the thread
+            self._refresh_thread.join()
 
     @property
     def brightness(self):
@@ -591,6 +596,7 @@ class Group:
         self._hidden = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
+        print("Creating Group")
 
     def append(self, layer):
         """Append a layer to the group. It will be drawn
@@ -640,6 +646,14 @@ class Group:
     def __delitem__(self, index):
         """Deletes the value at the given index."""
         del self._layers[index]
+
+    def _fill_area(self, buffer):
+        if self._hidden:
+            return
+
+        for layer in self._layers:
+            if isinstance(layer, (Group, TileGrid)):
+                layer._fill_area(buffer)
 
     @property
     def hidden(self):
@@ -700,7 +714,7 @@ class I2CDisplay:
         pass
 
 
-class OnDisplayBitmap:
+class OnDiskBitmap:
     """
     Loads values straight from disk. This minimizes memory use but can lead to much slower pixel load times.
     These load times may result in frame tearing where only part of the image is visible."""
@@ -717,7 +731,6 @@ class OnDisplayBitmap:
     def height(self):
         """Height of the bitmap. (read only)"""
         return self._image.height
-
 
 class Palette:
     """Map a pixel palette_index to a full color. Colors are transformed to the display’s format internally to save memory."""
@@ -761,23 +774,15 @@ class Palette:
             self._colors[index] = self._make_color(value)
 
     def __getitem__(self, index):
-        pass
+        if not 0 <= index < len(self._colors):
+            raise ValueError("Palette index out of range")
+        return self._colors[index]
 
     def make_transparent(self, palette_index):
         self._colors[palette_index].transparent = True
 
     def make_opaque(self, palette_index):
         self._colors[palette_index].transparent = False
-
-    def _pil_palette(self):
-        "Generate a Pillow ImagePalette and return it"
-        palette = []
-        for channel in range(3):
-            for color in self._colors:
-                palette.append(color >> (8 * (2 - channel)) & 0xFF)
-            
-        return ImagePalette(mode='RGB', palette=palette, size=self._color_count)
-
 
 class ParallelBus:
     """Manage updating a display over 8-bit parallel bus in the background while Python code runs.
@@ -852,7 +857,7 @@ class TileGrid:
         if not isinstance(pixel_shader, (ColorConverter, Palette)):
             raise ValueError("Unsupported Pixel Shader type")
         self._pixel_shader = pixel_shader
-        self_hidden = False
+        self._hidden = False
         self._x = x
         self._y = y
         self._width = width # Number of Tiles Wide
@@ -869,15 +874,49 @@ class TileGrid:
         self._tile_height = tile_height
         self._tiles = (self._width * self._height) * [default_tile]
 
+    def _fill_area(self, buffer):
+        """Draw onto the image"""
+        print("Drawing TileGrid")
+        if self._hidden:
+            return
+        
+        image = Image.new("RGB", (self._width * self._tile_width, self._height * self._tile_height))
+        
+        for tile_x in range(self._width):
+            for tile_y in range(self._height):
+                tile_index = self._tiles[tile_y * self._width + tile_x]
+                tile_index_x = tile_index % self._width
+                tile_index_y = tile_index // self._width
+                for pixel_x in range(self._tile_width):
+                    for pixel_y in range(self._tile_height):
+                        image_x = tile_x * self._tile_width + pixel_x
+                        image_y = tile_y * self._tile_height + pixel_y
+                        bitmap_x = tile_index_x * self._tile_width + pixel_x
+                        bitmap_y = tile_index_y * self._tile_height + pixel_y
+                        pixel_color = self._pixel_shader[self._bitmap[bitmap_x, bitmap_y]]
+                        image.putpixel((image_x, image_y), pixel_color["rgb888"])
+
+        buffer.paste(image, (self._x, self._y))
+        """
+        Strategy
+        ------------
+        Draw on it
+        Apply the palette
+        Do any transforms or mirrors or whatever
+        Paste into buffer at our x,y position
+        """
+        
 
     @property
     def hidden(self):
         """True when the TileGrid is hidden. This may be False even when a part of a hidden Group."""
-        return self_hidden
+        return self._hidden
 
     @hidden.setter
     def hidden(self, value):
-        self._hidden = value
+        if not isinstance(value, (bool, int)):
+            raise ValueError("Expecting a boolean or integer value")
+        self._hidden = bool(value)
 
     @property
     def x(self):
