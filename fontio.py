@@ -34,23 +34,24 @@ fontio for Blinka
 
 """
 
-from displayio import Bitmap
 from PIL import ImageFont
+from displayio import Bitmap
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class BuiltinFont:
+    """Simulate a font built into CircuitPython"""
     def __init__(self):
         self._font = ImageFont.load_default()
-        ascii = ""
+        ascii_chars = ""
         for character in range(0x20, 0x7F):
-            ascii += chr(character)
-        self._font.getmask(ascii)
-        bmp_size = self._font.getsize(ascii)
+            ascii_chars += chr(character)
+        self._font.getmask(ascii_chars)
+        bmp_size = self._font.getsize(ascii_chars)
         self._bitmap = Bitmap(bmp_size[0], bmp_size[1], 2)
-        ascii_mask = self._font.getmask(ascii, mode="1")
+        ascii_mask = self._font.getmask(ascii_chars, mode="1")
         for x in range(bmp_size[0]):
             for y in range(bmp_size[1]):
                 self._bitmap[x, y] = 1 if ascii_mask.getpixel((x, y)) else 0
@@ -58,9 +59,12 @@ class BuiltinFont:
     def _get_glyph_index(self, charcode):
         if 0x20 <= charcode <= 0x7E:
             return charcode - 0x20
+        return None
 
     def get_bounding_box(self):
-        """Returns the maximum bounds of all glyphs in the font in a tuple of two values: width, height."""
+        """Returns the maximum bounds of all glyphs in the font in
+        a tuple of two values: width, height.
+        """
         return self._font.getsize("M")
 
     def get_glyph(self, codepoint):
@@ -79,12 +83,15 @@ class BuiltinFont:
 
     @property
     def bitmap(self):
-        """Bitmap containing all font glyphs starting with ASCII and followed by unicode. Use `get_glyph` in most cases. This is useful for use with `displayio.TileGrid` and `terminalio.Terminal`.
+        """Bitmap containing all font glyphs starting with ASCII and followed by unicode. Use
+        `get_glyph` in most cases. This is useful for use with `displayio.TileGrid` and
+        `terminalio.Terminal`.
         """
         return self._bitmap
 
 
 class Glyph:
+    """Storage of glyph info"""
     def __init__(self, *, bitmap, tile_index, width, height, dx, dy, shift_x, shift_y):
         self.bitmap = bitmap
         self.width = width

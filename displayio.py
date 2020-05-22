@@ -35,14 +35,13 @@ displayio for Blinka
 
 """
 
-import os
-import digitalio
 import time
 import struct
 import threading
-import numpy
 from collections import namedtuple
-from PIL import Image, ImageDraw, ImagePalette
+import numpy
+import digitalio
+from PIL import Image
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -60,7 +59,7 @@ def release_displays():
     initialization so the display is active as long as possible.
     """
     for _disp in _displays:
-        _disp._release()
+        _disp._release() # pylint: disable=protected-access
     _displays.clear()
 
 
@@ -167,7 +166,7 @@ class ColorConverter:
 
     def __init__(self, *, dither=False):
         """Create a ColorConverter object to convert color formats.
-        Only supports RGB888 to RGB565 currently.
+        Only supports RGblue88 to RGB565 currently.
         :param bool dither: Adds random noise to dither the output image
         """
         self._dither = dither
@@ -178,40 +177,40 @@ class ColorConverter:
         return (color >> 19) << 11 | ((color >> 10) & 0x3F) << 5 | (color >> 3) & 0x1F
 
     def _compute_luma(self, color):
-        r8 = color >> 16
-        g8 = (color >> 8) & 0xFF
-        b8 = color & 0xFF
-        return (r8 * 19) / 255 + (g8 * 182) / 255 + (b8 + 54) / 255
+        red = color >> 16
+        green = (color >> 8) & 0xFF
+        blue = color & 0xFF
+        return (red * 19) / 255 + (green * 182) / 255 + (blue + 54) / 255
 
     def _compute_chroma(self, color):
-        r8 = color >> 16
-        g8 = (color >> 8) & 0xFF
-        b8 = color & 0xFF
-        return max(r8, g8, b8) - min(r8, g8, b8)
+        red = color >> 16
+        green = (color >> 8) & 0xFF
+        blue = color & 0xFF
+        return max(red, green, blue) - min(red, green, blue)
 
     def _compute_hue(self, color):
-        r8 = color >> 16
-        g8 = (color >> 8) & 0xFF
-        b8 = color & 0xFF
-        max_color = max(r8, g8, b8)
+        red = color >> 16
+        green = (color >> 8) & 0xFF
+        blue = color & 0xFF
+        max_color = max(red, green, blue)
         chroma = self._compute_chroma(color)
         if chroma == 0:
             return 0
         hue = 0
-        if max_color == r8:
-            hue = (((g8 - b8) * 40) / chroma) % 240
-        elif max_color == g8:
-            hue = (((b8 - r8) + (2 * chroma)) * 40) / chroma
-        elif max_color == b8:
-            hue = (((r8 - g8) + (4 * chroma)) * 40) / chroma
+        if max_color == red:
+            hue = (((green - blue) * 40) / chroma) % 240
+        elif max_color == green:
+            hue = (((blue - red) + (2 * chroma)) * 40) / chroma
+        elif max_color == blue:
+            hue = (((red - green) + (4 * chroma)) * 40) / chroma
         if hue < 0:
             hue += 240
 
         return hue
 
     def _dither_noise_1(self, noise):
-        n = (n >> 13) ^ n
-        nn = (n * (n * n * 60493 + 19990303) + 1376312589) & 0x7FFFFFFF
+        noise = (noise >> 13) ^ noise
+        nn = (noise * (noise * noise * 60493 + 19990303) + 1376312589) & 0x7FFFFFFF
         return (nn / (1073741824.0 * 2)) * 255
 
     def _dither_noise_2(self, x, y):
@@ -221,18 +220,19 @@ class ColorConverter:
         pass
 
     def convert(self, color):
-        "Converts the given RGB888 color to RGB565"
+        "Converts the given RGblue88 color to RGB565"
         if self._dither:
             return color  # To Do: return a dithered color
-        else:
-            return self._compute_rgb565(color)
+        return self._compute_rgb565(color)
 
     def _pil_palette(self):
         return None
 
     @property
     def dither(self):
-        "When true the color converter dithers the output by adding random noise when truncating to display bitdepth"
+        """When true the color converter dithers the output by adding
+        random noise when truncating to display bitdepth
+        """
         return self._dither
 
     @dither.setter
@@ -249,7 +249,7 @@ class Display:
 
     Most people should not use this class directly. Use a specific display driver instead
     that will contain the initialization sequence at minimum.
-    
+
     .. class::
         Display(display_bus, init_sequence, *, width, height, colstart=0, rowstart=0, rotation=0,
         color_depth=16, grayscale=False, pixels_in_byte_share_row=True, bytes_per_cell=1,
@@ -257,7 +257,6 @@ class Display:
         write_ram_command=0x2c, set_vertical_scroll=0, backlight_pin=None, brightness_command=None,
         brightness=1.0, auto_brightness=False, single_byte_bounds=False, data_as_commands=False,
         auto_refresh=True, native_frames_per_second=60)
-    
     """
 
     def __init__(
@@ -288,27 +287,32 @@ class Display:
         auto_refresh=True,
         native_frames_per_second=60
     ):
-        """Create a Display object on the given display bus (`displayio.FourWire` or `displayio.ParallelBus`).
+        """Create a Display object on the given display bus (`displayio.FourWire` or
+        `displayio.ParallelBus`).
 
-        The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins with a command byte
-        followed by a byte to determine the parameter count and if a delay is need after. When the top bit of the
-        second byte is 1, the next byte will be the delay time in milliseconds. The remaining 7 bits are the
-        parameter count excluding any delay byte. The third through final bytes are the remaining command
-        parameters. The next byte will begin a new command definition. Here is a portion of ILI9341 init code:
+        The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins
+        with a command byte followed by a byte to determine the parameter count and if a
+        delay is need after. When the top bit of the second byte is 1, the next byte will be
+        the delay time in milliseconds. The remaining 7 bits are the parameter count
+        excluding any delay byte. The third through final bytes are the remaining command
+        parameters. The next byte will begin a new command definition. Here is a portion of
+        ILI9341 init code:
         .. code-block:: python
-        
-            init_sequence = (b"\xe1\x0f\x00\x0E\x14\x03\x11\x07\x31\xC1\x48\x08\x0F\x0C\x31\x36\x0F" # Set Gamma
+
+            init_sequence = (
+                b"\xe1\x0f\x00\x0E\x14\x03\x11\x07\x31\xC1\x48\x08\x0F\x0C\x31\x36\x0F"
                 b"\x11\x80\x78"# Exit Sleep then delay 0x78 (120ms)
                 b"\x29\x80\x78"# Display on then delay 0x78 (120ms)
             )
             display = displayio.Display(display_bus, init_sequence, width=320, height=240)
-        
-        The first command is 0xe1 with 15 (0xf) parameters following. The second and third are 0x11 and 0x29
-        respectively with delays (0x80) of 120ms (0x78) and no parameters. Multiple byte literals (b”“) are
-        merged together on load. The parens are needed to allow byte literals on subsequent lines.
 
-        The initialization sequence should always leave the display memory access inline with the scan of
-        the display to minimize tearing artifacts.
+        The first command is 0xe1 with 15 (0xf) parameters following. The second and third
+        are 0x11 and 0x29 respectively with delays (0x80) of 120ms (0x78) and no parameters.
+        Multiple byte literals (b”“) are merged together on load. The parens are needed to
+        allow byte literals on subsequent lines.
+
+        The initialization sequence should always leave the display memory access inline with
+        the scan of the display to minimize tearing artifacts.
         """
         self._bus = display_bus
         self._set_column_command = set_column_command
@@ -371,22 +375,22 @@ class Display:
         self._current_group = group
 
     def refresh(self, *, target_frames_per_second=60, minimum_frames_per_second=1):
-        """When auto refresh is off, waits for the target frame rate and then refreshes the display,
-        returning True. If the call has taken too long since the last refresh call for the given target
-        frame rate, then the refresh returns False immediately without updating the screen to hopefully
-        help getting caught up.
+        """When auto refresh is off, waits for the target frame rate and then refreshes the
+        display, returning True. If the call has taken too long since the last refresh call
+        for the given target frame rate, then the refresh returns False immediately without
+        updating the screen to hopefully help getting caught up.
 
-        If the time since the last successful refresh is below the minimum frame rate, then an exception
-        will be raised. Set minimum_frames_per_second to 0 to disable.
+        If the time since the last successful refresh is below the minimum frame rate, then
+        an exception will be raised. Set minimum_frames_per_second to 0 to disable.
 
-        When auto refresh is on, updates the display immediately. (The display will also update without
-        calls to this.)
+        When auto refresh is on, updates the display immediately. (The display will also
+        update without calls to this.)
         """
         # Go through groups and and add each to buffer
         if self._current_group is not None:
             buffer = Image.new("RGB", (self._width, self._height))
             # Recursively have everything draw to the image
-            self._current_group._fill_area(buffer)
+            self._current_group._fill_area(buffer)  # pylint: disable=protected-access
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
         print("refreshing")
@@ -456,9 +460,9 @@ class Display:
 
     @property
     def brightness(self):
-        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`. When
-        `auto_brightness` is True, the value of `brightness` will change automatically. If `brightness`
-        is set, `auto_brightness` will be disabled and will be set to False.
+        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`.
+        When `auto_brightness` is True, the value of `brightness` will change automatically.
+        If `brightness` is set, `auto_brightness` will be disabled and will be set to False.
         """
         return self._brightness
 
@@ -468,10 +472,10 @@ class Display:
 
     @property
     def auto_brightness(self):
-        """True when the display brightness is adjusted automatically, based on an ambient light sensor
-        or other method. Note that some displays may have this set to True by default, but not actually
-        implement automatic brightness adjustment. `auto_brightness` is set to False if `brightness`
-        is set manually.
+        """True when the display brightness is adjusted automatically, based on an ambient
+        light sensor or other method. Note that some displays may have this set to True by
+        default, but not actually implement automatic brightness adjustment.
+        `auto_brightness` is set to False if `brightness` is set manually.
         """
         return self._auto_brightness
 
@@ -533,20 +537,21 @@ class EPaperDisplay:
         always_toggle_chip_select=False
     ):
         """
-        Create a EPaperDisplay object on the given display bus (displayio.FourWire or displayio.ParallelBus).
+        Create a EPaperDisplay object on the given display bus (displayio.FourWire or
+        displayio.ParallelBus).
 
-        The start_sequence and stop_sequence are bitpacked to minimize the ram impact. Every command
-        begins with a command byte followed by a byte to determine the parameter count and if a delay
-        is need after. When the top bit of the second byte is 1, the next byte will be the delay time
-        in milliseconds. The remaining 7 bits are the parameter count excluding any delay byte. The
-        third through final bytes are the remaining command parameters. The next byte will begin a
-        new command definition.
+        The start_sequence and stop_sequence are bitpacked to minimize the ram impact. Every
+        command begins with a command byte followed by a byte to determine the parameter
+        count and if a delay is need after. When the top bit of the second byte is 1, the
+        next byte will be the delay time in milliseconds. The remaining 7 bits are the
+        parameter count excluding any delay byte. The third through final bytes are the
+        remaining command parameters. The next byte will begin a new command definition.
         """
         pass
 
     def show(self, group):
-        """Switches to displaying the given group of layers. When group is None, the default CircuitPython
-        terminal will be shown.
+        """Switches to displaying the given group of layers. When group is None, the default
+        CircuitPython terminal will be shown (eventually).
         """
         pass
 
@@ -592,10 +597,12 @@ class FourWire:
     ):
         """Create a FourWire object associated with the given pins.
 
-        The SPI bus and pins are then in use by the display until displayio.release_displays() is called
-        even after a reload. (It does this so CircuitPython can use the display after your code is done.)
+        The SPI bus and pins are then in use by the display until
+        displayio.release_displays() is called even after a reload. (It does this so
+        CircuitPython can use the display after your code is done.)
         So, the first time you initialize a display bus in code.py you should call
-        :py:func`displayio.release_displays` first, otherwise it will error after the first code.py run.
+        :py:func`displayio.release_displays` first, otherwise it will error after the
+        first code.py run.
         """
         self._dc = digitalio.DigitalInOut(command)
         self._dc.switch_to_output()
@@ -718,7 +725,7 @@ class Group:
 
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
-                layer._fill_area(buffer)
+                layer._fill_area(buffer)    # pylint: disable=protected-access
 
     @property
     def hidden(self):
@@ -786,8 +793,9 @@ class I2CDisplay:
 
 class OnDiskBitmap:
     """
-    Loads values straight from disk. This minimizes memory use but can lead to much slower pixel load times.
-    These load times may result in frame tearing where only part of the image is visible."""
+    Loads values straight from disk. This minimizes memory use but can lead to much slower
+    pixel load times. These load times may result in frame tearing where only part of the
+    image is visible."""
 
     def __init__(self, file):
         self._image = Image.open(file)
@@ -819,7 +827,7 @@ class Palette:
     def _make_color(self, value):
         color = {
             "transparent": False,
-            "rgb888": 0,
+            "rgblue88": 0,
         }
         color_converter = ColorConverter()
         if isinstance(value, (tuple, list, bytes, bytearray)):
@@ -829,7 +837,7 @@ class Palette:
                 raise ValueError("Color must be between 0x000000 and 0xFFFFFF")
         else:
             raise TypeError("Color buffer must be a buffer, tuple, list, or int")
-        color["rgb888"] = value
+        color["rgblue88"] = value
         self._needs_refresh = True
 
         return color
@@ -846,7 +854,7 @@ class Palette:
         (to represent an RGB value). Value can be an int, bytes (3 bytes (RGB) or
         4 bytes (RGB + pad byte)), bytearray, or a tuple or list of 3 integers.
         """
-        if self._colors[index]["rgb888"] != value:
+        if self._colors[index]["rgblue88"] != value:
             self._colors[index] = self._make_color(value)
 
     def __getitem__(self, index):
@@ -862,18 +870,20 @@ class Palette:
 
 
 class ParallelBus:
-    """Manage updating a display over 8-bit parallel bus in the background while Python code runs.
-    This protocol may be refered to as 8080-I Series Parallel Interface in datasheets.
+    """Manage updating a display over 8-bit parallel bus in the background while Python code
+    runs. This protocol may be refered to as 8080-I Series Parallel Interface in datasheets.
     It doesn’t handle display initialization.
     """
 
     def __init__(self, i2c_bus, *, device_address, reset=None):
         """Create a ParallelBus object associated with the given pins. The
-        bus is inferred from data0 by implying the next 7 additional pins on a given GPIO port.
+        bus is inferred from data0 by implying the next 7 additional pins on a given GPIO
+        port.
 
-        The parallel bus and pins are then in use by the display until displayio.release_displays()
-        is called even after a reload. (It does this so CircuitPython can use the display after your
-        code is done.) So, the first time you initialize a display bus in code.py you should call
+        The parallel bus and pins are then in use by the display until
+        displayio.release_displays() is called even after a reload. (It does this so
+        CircuitPython can use the display after your code is done.) So, the first time you
+        initialize a display bus in code.py you should call
         :py:func`displayio.release_displays` first, otherwise it will error after the first
         code.py run.
         """
@@ -886,20 +896,23 @@ class ParallelBus:
         pass
 
     def send(self, command, data):
-        """Sends the given command value followed by the full set of data. Display state, such as
-        vertical scroll, set via ``send`` may or may not be reset once the code is done.
+        """Sends the given command value followed by the full set of data. Display state,
+        such as vertical scroll, set via ``send`` may or may not be reset once the code is
+        done.
         """
         pass
 
 
 class Shape(Bitmap):
-    """Create a Shape object with the given fixed size. Each pixel is one bit and is stored by the column
-    boundaries of the shape on each row. Each row’s boundary defaults to the full row.
+    """Create a Shape object with the given fixed size. Each pixel is one bit and is stored
+    by the column boundaries of the shape on each row. Each row’s boundary defaults to the
+    full row.
     """
 
     def __init__(self, width, height, *, mirror_x=False, mirror_y=False):
-        """Create a Shape object with the given fixed size. Each pixel is one bit and is stored by the
-        column boundaries of the shape on each row. Each row’s boundary defaults to the full row.
+        """Create a Shape object with the given fixed size. Each pixel is one bit and is
+        stored by the column boundaries of the shape on each row. Each row’s boundary
+        defaults to the full row.
         """
         pass
 
@@ -928,9 +941,9 @@ class TileGrid:
         x=0,
         y=0
     ):
-        """Create a TileGrid object. The bitmap is source for 2d pixels. The pixel_shader is used to convert
-        the value and its location to a display native pixel color. This may be a simple color palette lookup,
-        a gradient, a pattern or a color transformer.
+        """Create a TileGrid object. The bitmap is source for 2d pixels. The pixel_shader is
+        used to convert the value and its location to a display native pixel color. This may
+        be a simple color palette lookup, a gradient, a pattern or a color transformer.
 
         tile_width and tile_height match the height of the bitmap by default.
         """
@@ -989,7 +1002,7 @@ class TileGrid:
                             self._bitmap[bitmap_x, bitmap_y]
                         ]
                         if not pixel_color["transparent"]:
-                            image.putpixel((image_x, image_y), pixel_color["rgb888"])
+                            image.putpixel((image_x, image_y), pixel_color["rgblue88"])
 
         # Apply transforms or mirrors or whatever here
         if self._tile_width == 6:
@@ -998,7 +1011,8 @@ class TileGrid:
 
     @property
     def hidden(self):
-        """True when the TileGrid is hidden. This may be False even when a part of a hidden Group."""
+        """True when the TileGrid is hidden. This may be False even
+        when a part of a hidden Group."""
         return self._hidden
 
     @hidden.setter
@@ -1041,8 +1055,8 @@ class TileGrid:
 
     @property
     def transpose_xy(self):
-        """If true, the TileGrid’s axis will be swapped. When combined with mirroring, any 90 degree
-        rotation can be achieved along with the corresponding mirrored version.
+        """If true, the TileGrid’s axis will be swapped. When combined with mirroring, any 90
+        degree rotation can be achieved along with the corresponding mirrored version.
         """
         return self._transpose_xy
 
@@ -1065,10 +1079,10 @@ class TileGrid:
             x = index[0]
             y = index[1]
             index = y * self._width + x
-        elif ininstance(index, int):
+        elif isinstance(index, int):
             x = index % self._width
             y = index // self._width
-        if x > self._width or y > self._height:
+        if x > self._width or y > self._height or index >= len(self._tiles):
             raise ValueError("Tile index out of bounds")
         return self._tiles[index]
 
@@ -1080,10 +1094,10 @@ class TileGrid:
             x = index[0]
             y = index[1]
             index = y * self._width + x
-        elif ininstance(index, int):
+        elif isinstance(index, int):
             x = index % self._width
             y = index // self._width
-        if x > width or y > self._height or index >= len(self._tiles):
+        if x > self._width or y > self._height or index >= len(self._tiles):
             raise ValueError("Tile index out of bounds")
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
