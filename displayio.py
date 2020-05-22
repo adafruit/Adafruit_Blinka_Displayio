@@ -38,18 +38,20 @@ displayio for Blinka
 import time
 import struct
 import threading
-from collections import namedtuple
 import numpy
 import digitalio
 from PIL import Image
+from recordclass import recordclass
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
+# pylint: disable=unnecessary-pass, unused-argument, too-many-lines
+
 _displays = []
 
-Rectangle = namedtuple("Rectangle", "x1 y1 x2 y2")
-AbsoluteTransform = namedtuple("AbsoluteTransform", "scale transpose_xy flip_x flip_y")
+Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
+Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
 
 def release_displays():
@@ -120,7 +122,7 @@ class Bitmap:
             x = index[0]
             y = index[1]
             index = y * self._width + x
-        elif ininstance(index, int):
+        elif isinstance(index, int):
             x = index % self._width
             y = index // self._width
         self._data[index] = value
@@ -166,12 +168,13 @@ class ColorConverter:
 
     def __init__(self, *, dither=False):
         """Create a ColorConverter object to convert color formats.
-        Only supports RGblue88 to RGB565 currently.
+        Only supports rgb888 to RGB565 currently.
         :param bool dither: Adds random noise to dither the output image
         """
         self._dither = dither
         self._depth = 16
 
+    # pylint: disable=no-self-use
     def _compute_rgb565(self, color):
         self._depth = 16
         return (color >> 19) << 11 | ((color >> 10) & 0x3F) << 5 | (color >> 3) & 0x1F
@@ -210,8 +213,10 @@ class ColorConverter:
 
     def _dither_noise_1(self, noise):
         noise = (noise >> 13) ^ noise
-        nn = (noise * (noise * noise * 60493 + 19990303) + 1376312589) & 0x7FFFFFFF
-        return (nn / (1073741824.0 * 2)) * 255
+        more_noise = (
+            noise * (noise * noise * 60493 + 19990303) + 1376312589
+        ) & 0x7FFFFFFF
+        return (more_noise / (1073741824.0 * 2)) * 255
 
     def _dither_noise_2(self, x, y):
         return self._dither_noise_1(x + y * 0xFFFF)
@@ -220,13 +225,12 @@ class ColorConverter:
         pass
 
     def convert(self, color):
-        "Converts the given RGblue88 color to RGB565"
+        "Converts the given rgb888 color to RGB565"
         if self._dither:
             return color  # To Do: return a dithered color
         return self._compute_rgb565(color)
 
-    def _pil_palette(self):
-        return None
+    # pylint: enable=no-self-use
 
     @property
     def dither(self):
@@ -242,6 +246,7 @@ class ColorConverter:
         self._dither = value
 
 
+# pylint: disable=too-many-instance-attributes
 class Display:
     """This initializes a display and connects it into CircuitPython. Unlike other objects
     in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
@@ -259,6 +264,7 @@ class Display:
         auto_refresh=True, native_frames_per_second=60)
     """
 
+    # pylint: disable=too-many-locals
     def __init__(
         self,
         display_bus,
@@ -330,7 +336,7 @@ class Display:
         self._brightness = brightness
         self._auto_refresh = auto_refresh
         self._initialize(init_sequence)
-        self._buffer = Image.new("RGB", (width, height))
+        self._buffer = Image.new("RGBA", (width, height))
         self._subrectangles = []
         self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
         self._current_group = None
@@ -339,6 +345,8 @@ class Display:
         if self._auto_refresh:
             self.auto_refresh = True
 
+    # pylint: enable=too-many-locals
+
     def _initialize(self, init_sequence):
         i = 0
         while i < len(init_sequence):
@@ -346,7 +354,6 @@ class Display:
             data_size = init_sequence[i + 1]
             delay = (data_size & 0x80) > 0
             data_size &= ~0x80
-            data_byte = init_sequence[i + 2]
             self._write(command, init_sequence[i + 2 : i + 2 + data_size])
             delay_time_ms = 10
             if delay:
@@ -388,12 +395,11 @@ class Display:
         """
         # Go through groups and and add each to buffer
         if self._current_group is not None:
-            buffer = Image.new("RGB", (self._width, self._height))
+            buffer = Image.new("RGBA", (self._width, self._height))
             # Recursively have everything draw to the image
             self._current_group._fill_area(buffer)  # pylint: disable=protected-access
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
-        print("refreshing")
         time.sleep(1)
         # Eventually calculate dirty rectangles here
         self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
@@ -407,7 +413,6 @@ class Display:
 
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
-        """Read or write a block of data."""
         data = numpy.array(self._buffer.crop(rectangle).convert("RGB")).astype("uint16")
         color = (
             ((data[:, :, 0] & 0xF8) << 8)
@@ -438,10 +443,12 @@ class Display:
         return struct.pack(self._bounds_encoding, x, y)
 
     def fill_row(self, y, buffer):
+        """Extract the pixels from a single row"""
         pass
 
     @property
     def auto_refresh(self):
+        """True when the display is refreshed automatically."""
         return self._auto_refresh
 
     @auto_refresh.setter
@@ -485,10 +492,12 @@ class Display:
 
     @property
     def width(self):
+        """Display Width"""
         return self._width
 
     @property
     def height(self):
+        """Display Height"""
         return self._height
 
     @property
@@ -504,10 +513,26 @@ class Display:
 
     @property
     def bus(self):
+        """Current Display Bus"""
         return self._bus
 
 
+# pylint: enable=too-many-instance-attributes
+
+
 class EPaperDisplay:
+    """Manage updating an epaper display over a display bus
+
+    This initializes an epaper display and connects it into CircuitPython. Unlike other
+    objects in CircuitPython, EPaperDisplay objects live until
+    displayio.release_displays() is called. This is done so that CircuitPython can use
+    the display itself.
+
+    Most people should not use this class directly. Use a specific display driver instead
+    that will contain the startup and shutdown sequences at minimum.
+    """
+
+    # pylint: disable=too-many-locals
     def __init__(
         self,
         display_bus,
@@ -549,6 +574,8 @@ class EPaperDisplay:
         """
         pass
 
+    # pylint: enable=too-many-locals
+
     def show(self, group):
         """Switches to displaying the given group of layers. When group is None, the default
         CircuitPython terminal will be shown (eventually).
@@ -568,14 +595,17 @@ class EPaperDisplay:
 
     @property
     def width(self):
+        """Display Width"""
         pass
 
     @property
     def height(self):
+        """Display Height"""
         pass
 
     @property
     def bus(self):
+        """Current Display Bus"""
         pass
 
 
@@ -629,13 +659,22 @@ class FourWire:
             self._reset.deinit()
 
     def reset(self):
+        """Performs a hardware reset via the reset pin.
+        Raises an exception if called when no reset pin is available.
+        """
         if self._reset is not None:
             self._reset.value = False
             time.sleep(0.001)
             self._reset.value = True
             time.sleep(0.001)
+        else:
+            raise RuntimeError("No reset pin defined")
 
     def send(self, is_command, data, *, toggle_every_byte=False):
+        """Sends the given command value followed by the full set of data. Display state,
+        such as vertical scroll, set via ``send`` may or may not be reset once the code is
+        done.
+        """
         while self._spi.try_lock():
             pass
         self._dc.value = not is_command
@@ -659,49 +698,84 @@ class Group:
         pixel being 2x2 pixels when in the group.
         """
         if not isinstance(max_size, int) or max_size < 1:
-            raise ValueError("Max Size must be an integer and >= 1")
+            raise ValueError("Max Size must be >= 1")
         self._max_size = max_size
         if not isinstance(scale, int) or scale < 1:
-            raise ValueError("Scale must be an integer and >= 1")
+            raise ValueError("Scale must be >= 1")
         self._scale = scale
         self._x = x
         self._y = y
         self._hidden = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
+        self._absolute_transform = None
+        self.in_group = False
+        self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
+
+    def update_transform(self, parent_transform):
+        """Update the parent transform and child transforms"""
+        self.in_group = parent_transform is not None
+        if self.in_group:
+            x = self._x
+            y = self._y
+            if parent_transform.transpose_xy:
+                x, y = y, x
+            self._absolute_transform.x = parent_transform.x + parent_transform.dx * x
+            self._absolute_transform.y = parent_transform.y + parent_transform.dy * y
+            self._absolute_transform.dx = parent_transform.dx * self._scale
+            self._absolute_transform.dy = parent_transform.dy * self._scale
+            self._absolute_transform.transpose_xy = parent_transform.transpose_xy
+            self._absolute_transform.mirror_x = parent_transform.mirror_x
+            self._absolute_transform.mirror_y = parent_transform.mirror_y
+            self._absolute_transform.scale = parent_transform.scale * self._scale
+        self._update_child_transforms()
+
+    def _update_child_transforms(self):
+        if self.in_group:
+            for layer in self._layers:
+                layer.update_transform(self._absolute_transform)
+
+    def _removal_cleanup(self, index):
+        layer = self._layers[index]
+        layer.update_transform(None)
+
+    def _layer_update(self, index):
+        layer = self._layers[index]
+        layer.update_transform(self._absolute_transform)
 
     def append(self, layer):
         """Append a layer to the group. It will be drawn
         above other layers.
         """
-        if not isinstance(layer, self._supported_types):
-            raise ValueError("Invalid Group Memeber")
-        if len(self._layers) == self._max_size:
-            raise RuntimeError("Group full")
-        self._layers.append(layer)
+        self.insert(len(self._layers), layer)
 
     def insert(self, index, layer):
         """Insert a layer into the group."""
         if not isinstance(layer, self._supported_types):
-            raise ValueError("Invalid Group Memeber")
+            raise ValueError("Invalid Group Member")
+        if layer.in_group:
+            raise ValueError("Layer already in a group.")
         if len(self._layers) == self._max_size:
             raise RuntimeError("Group full")
         self._layers.insert(index, layer)
+        self._layer_update(index)
 
     def index(self, layer):
         """Returns the index of the first copy of layer.
         Raises ValueError if not found.
         """
-        pass
+        return self._layers.index(layer)
 
     def pop(self, index=-1):
         """Remove the ith item and return it."""
+        self._removal_cleanup(index)
         return self._layers.pop(index)
 
     def remove(self, layer):
         """Remove the first copy of layer. Raises ValueError
         if it is not present."""
-        pass
+        index = self.index(layer)
+        self._layers.pop(index)
 
     def __len__(self):
         """Returns the number of layers in a Group"""
@@ -713,7 +787,9 @@ class Group:
 
     def __setitem__(self, index, value):
         """Sets the value at the given index."""
+        self._removal_cleanup(index)
         self._layers[index] = value
+        self._layer_update(index)
 
     def __delitem__(self, index):
         """Deletes the value at the given index."""
@@ -729,6 +805,9 @@ class Group:
 
     @property
     def hidden(self):
+        """True when the Group and all of it’s layers are not visible. When False, the
+        Group’s layers are visible if they haven’t been hidden.
+        """
         return self._hidden
 
     @hidden.setter
@@ -739,33 +818,65 @@ class Group:
 
     @property
     def scale(self):
+        """Scales each pixel within the Group in both directions. For example, when
+        scale=2 each pixel will be represented by 2x2 pixels.
+        """
         return self._scale
 
     @scale.setter
     def scale(self, value):
         if not isinstance(value, int) or value < 1:
-            raise ValueError("Scale must be an integer and at least 1")
-        self._scale = value
+            raise ValueError("Scale must be >= 1")
+        if self._scale != value:
+            parent_scale = self._absolute_transform.scale / self._scale
+            self._absolute_transform.dx = (
+                self._absolute_transform.dx / self._scale * value
+            )
+            self._absolute_transform.dy = (
+                self._absolute_transform.dy / self._scale * value
+            )
+            self._absolute_transform.scale = parent_scale * value
+
+            self._scale = value
+            self._update_child_transforms()
 
     @property
     def x(self):
+        """X position of the Group in the parent."""
         return self._x
 
     @x.setter
     def x(self, value):
         if not isinstance(value, int):
             raise ValueError("x must be an integer")
-        self._x = value
+        if self._x != value:
+            if self._absolute_transform.transpose_xy:
+                dy_value = self._absolute_transform.dy / self._scale
+                self._absolute_transform.y += dy_value * (value - self._x)
+            else:
+                dx_value = self._absolute_transform.dx / self._scale
+                self._absolute_transform.x += dx_value * (value - self._x)
+            self._x = value
+            self._update_child_transforms()
 
     @property
     def y(self):
+        """Y position of the Group in the parent."""
         return self._y
 
     @y.setter
     def y(self, value):
         if not isinstance(value, int):
             raise ValueError("y must be an integer")
-        self._y = value
+        if self._y != value:
+            if self._absolute_transform.transpose_xy:
+                dx_value = self._absolute_transform.dx / self._scale
+                self._absolute_transform.x += dx_value * (value - self._y)
+            else:
+                dy_value = self._absolute_transform.dy / self._scale
+                self._absolute_transform.y += dy_value * (value - self._y)
+            self._y = value
+            self._update_child_transforms()
 
 
 class I2CDisplay:
@@ -785,9 +896,16 @@ class I2CDisplay:
         pass
 
     def reset(self):
+        """Performs a hardware reset via the reset pin. Raises an exception if called
+        when no reset pin is available.
+        """
         pass
 
     def send(self, command, data):
+        """Sends the given command value followed by the full set of data. Display state,
+        such as vertical scroll, set via send may or may not be reset once the code is
+        done.
+        """
         pass
 
 
@@ -823,13 +941,24 @@ class Palette:
         self._colors = []
         for _ in range(color_count):
             self._colors.append(self._make_color(0))
+            self._update_rgba(len(self._colors) - 1)
 
-    def _make_color(self, value):
+    def _update_rgba(self, index):
+        color = self._colors[index]["rgb888"]
+        transparent = self._colors[index]["transparent"]
+        self._colors[index]["rgba"] = (
+            color >> 16,
+            (color >> 8) & 0xFF,
+            color & 0xFF,
+            0 if transparent else 0xFF,
+        )
+
+    def _make_color(self, value, transparent=False):
         color = {
-            "transparent": False,
-            "rgblue88": 0,
+            "transparent": transparent,
+            "rgb888": 0,
+            "rgba": (0, 0, 0, 255),
         }
-        color_converter = ColorConverter()
         if isinstance(value, (tuple, list, bytes, bytearray)):
             value = (value[0] & 0xFF) << 16 | (value[1] & 0xFF) << 8 | value[2] & 0xFF
         elif isinstance(value, int):
@@ -837,7 +966,7 @@ class Palette:
                 raise ValueError("Color must be between 0x000000 and 0xFFFFFF")
         else:
             raise TypeError("Color buffer must be a buffer, tuple, list, or int")
-        color["rgblue88"] = value
+        color["rgb888"] = value
         self._needs_refresh = True
 
         return color
@@ -854,8 +983,9 @@ class Palette:
         (to represent an RGB value). Value can be an int, bytes (3 bytes (RGB) or
         4 bytes (RGB + pad byte)), bytearray, or a tuple or list of 3 integers.
         """
-        if self._colors[index]["rgblue88"] != value:
+        if self._colors[index]["rgb888"] != value:
             self._colors[index] = self._make_color(value)
+            self._update_rgba(index)
 
     def __getitem__(self, index):
         if not 0 <= index < len(self._colors):
@@ -863,10 +993,14 @@ class Palette:
         return self._colors[index]
 
     def make_transparent(self, palette_index):
+        """Set the palette index to be a transparent color"""
         self._colors[palette_index]["transparent"] = True
+        self._update_rgba(palette_index)
 
     def make_opaque(self, palette_index):
+        """Set the palette index to be an opaque color"""
         self._colors[palette_index]["transparent"] = False
+        self._update_rgba(palette_index)
 
 
 class ParallelBus:
@@ -914,13 +1048,14 @@ class Shape(Bitmap):
         stored by the column boundaries of the shape on each row. Each row’s boundary
         defaults to the full row.
         """
-        pass
+        super().__init__(width, height, 2)
 
     def set_boundary(self, y, start_x, end_x):
         """Loads pre-packed data into the given row."""
         pass
 
 
+# pylint: disable=too-many-instance-attributes
 class TileGrid:
     """Position a grid of tiles sourced from a bitmap and pixel_shader combination. Multiple
     grids can share bitmaps and pixel shaders.
@@ -961,6 +1096,9 @@ class TileGrid:
         self._y = y
         self._width = width  # Number of Tiles Wide
         self._height = height  # Number of Tiles High
+        self._transpose_xy = False
+        self._flip_x = False
+        self._flip_y = False
         if tile_width is None:
             tile_width = bitmap_width
         if tile_height is None:
@@ -973,19 +1111,100 @@ class TileGrid:
         self._tile_height = tile_height
         if not 0 <= default_tile <= 255:
             raise ValueError("Default Tile is out of range")
+        self._pixel_width = width * tile_width
+        self._pixel_height = height * tile_height
         self._tiles = (self._width * self._height) * [default_tile]
+        self.in_group = False
+        self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
+        self._current_area = Rectangle(0, 0, self._pixel_width, self._pixel_height)
+        self._moved = False
 
+    def update_transform(self, absolute_transform):
+        """Update the parent transform and child transforms"""
+        self._absolute_transform = absolute_transform
+        if self._absolute_transform is not None:
+            self._update_current_x()
+            self._update_current_y()
+
+    def _update_current_x(self):
+        if self._transpose_xy:
+            width = self._pixel_height
+        else:
+            width = self._pixel_width
+        if self._absolute_transform.transpose_xy:
+            self._current_area.y1 = (
+                self._absolute_transform.y + self._absolute_transform.dy * self._x
+            )
+            self._current_area.y2 = (
+                self._absolute_transform.y
+                + self._absolute_transform.dy * (self._x + width)
+            )
+            if self._current_area.y2 < self._current_area.y1:
+                self._current_area.y1, self._current_area.y2 = (
+                    self._current_area.y2,
+                    self._current_area.y1,
+                )
+        else:
+            self._current_area.x1 = (
+                self._absolute_transform.x + self._absolute_transform.dx * self._x
+            )
+            self._current_area.x2 = (
+                self._absolute_transform.x
+                + self._absolute_transform.dx * (self._x + width)
+            )
+            if self._current_area.x2 < self._current_area.x1:
+                self._current_area.x1, self._current_area.x2 = (
+                    self._current_area.x2,
+                    self._current_area.x1,
+                )
+
+    def _update_current_y(self):
+        if self._transpose_xy:
+            height = self._pixel_width
+        else:
+            height = self._pixel_height
+        if self._absolute_transform.transpose_xy:
+            self._current_area.x1 = (
+                self._absolute_transform.x + self._absolute_transform.dx * self._y
+            )
+            self._current_area.x2 = (
+                self._absolute_transform.x
+                + self._absolute_transform.dx * (self._y + height)
+            )
+            if self._current_area.x2 < self._current_area.x1:
+                self._current_area.x1, self._current_area.x2 = (
+                    self._current_area.x2,
+                    self._current_area.x1,
+                )
+        else:
+            self._current_area.y1 = (
+                self._absolute_transform.y + self._absolute_transform.dy * self._y
+            )
+            self._current_area.y2 = (
+                self._absolute_transform.y
+                + self._absolute_transform.dy * (self._y + height)
+            )
+            if self._current_area.y2 < self._current_area.y1:
+                self._current_area.y1, self._current_area.y2 = (
+                    self._current_area.y2,
+                    self._current_area.y1,
+                )
+
+    # pylint: disable=too-many-locals
     def _fill_area(self, buffer):
         """Draw onto the image"""
         if self._hidden:
             return
 
         image = Image.new(
-            "RGB", (self._width * self._tile_width, self._height * self._tile_height)
+            "RGBA", (self._width * self._tile_width, self._height * self._tile_height)
         )
 
         tile_count_x = self._bitmap.width // self._tile_width
-        tile_count_y = self._bitmap.height // self._tile_height
+        x = self._x
+        y = self._y
+
+        # TODO: Fix transparency
 
         for tile_x in range(0, self._width):
             for tile_y in range(0, self._height):
@@ -1001,13 +1220,30 @@ class TileGrid:
                         pixel_color = self._pixel_shader[
                             self._bitmap[bitmap_x, bitmap_y]
                         ]
-                        if not pixel_color["transparent"]:
-                            image.putpixel((image_x, image_y), pixel_color["rgblue88"])
+                        image.putpixel((image_x, image_y), pixel_color["rgba"])
 
-        # Apply transforms or mirrors or whatever here
-        if self._tile_width == 6:
-            print("Putting at {}".format((self._x, self._y)))
-        buffer.paste(image, (self._x, self._y))
+        if self._absolute_transform is not None:
+            if self._absolute_transform.scale > 1:
+                image = image.resize(
+                    (
+                        self._pixel_width * self._absolute_transform.scale,
+                        self._pixel_height * self._absolute_transform.scale,
+                    ),
+                    resample=Image.NEAREST,
+                )
+            if self._absolute_transform.mirror_x:
+                image = image.transpose(Image.FLIP_LEFT_RIGHT)
+            if self._absolute_transform.mirror_y:
+                image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            if self._absolute_transform.transpose_xy:
+                image = image.transpose(Image.TRANSPOSE)
+            x *= self._absolute_transform.dx
+            y *= self._absolute_transform.dy
+            x += self._absolute_transform.x
+            y += self._absolute_transform.y
+        buffer.paste(image, (x, y))
+
+    # pylint: enable=too-many-locals
 
     @property
     def hidden(self):
@@ -1026,10 +1262,26 @@ class TileGrid:
         """X position of the left edge in the parent."""
         return self._x
 
+    @x.setter
+    def x(self, value):
+        if not isinstance(value, int):
+            raise TypeError("X should be a integer type")
+        if self._x != value:
+            self._x = value
+            self._update_current_x()
+
     @property
     def y(self):
         """Y position of the top edge in the parent."""
         return self._y
+
+    @y.setter
+    def y(self, value):
+        if not isinstance(value, int):
+            raise TypeError("Y should be a integer type")
+        if self._y != value:
+            self._y = value
+            self._update_current_y()
 
     @property
     def flip_x(self):
@@ -1040,7 +1292,8 @@ class TileGrid:
     def flip_x(self, value):
         if not isinstance(value, bool):
             raise TypeError("Flip X should be a boolean type")
-        self._flip_x = value
+        if self._flip_x != value:
+            self._flip_x = value
 
     @property
     def flip_y(self):
@@ -1051,7 +1304,8 @@ class TileGrid:
     def flip_y(self, value):
         if not isinstance(value, bool):
             raise TypeError("Flip Y should be a boolean type")
-        self._flip_y = value
+        if self._flip_y != value:
+            self._flip_y = value
 
     @property
     def transpose_xy(self):
@@ -1064,7 +1318,10 @@ class TileGrid:
     def transpose_xy(self, value):
         if not isinstance(value, bool):
             raise TypeError("Transpose XY should be a boolean type")
-        self._transpose_xy = value
+        if self._transpose_xy != value:
+            self._transpose_xy = value
+            self._update_current_x()
+            self._update_current_y()
 
     @property
     def pixel_shader(self):
@@ -1102,3 +1359,6 @@ class TileGrid:
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
         self._tiles[index] = value
+
+
+# pylint: enable=too-many-instance-attributes
