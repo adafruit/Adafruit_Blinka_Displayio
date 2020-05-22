@@ -49,7 +49,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 _displays = []
 
 Rectangle = namedtuple("Rectangle", "x1 y1 x2 y2")
-AbsoluteTransform = namedtuple("AbsoluteTransform", "scale transposexy")
+AbsoluteTransform = namedtuple("AbsoluteTransform", "scale transpose_xy flip_x flip_y")
 
 
 def release_displays():
@@ -59,7 +59,7 @@ def release_displays():
     initialization so the display is active as long as possible.
     """
     for _disp in _displays:
-        _disp._release() # pylint: disable=protected-access
+        _disp._release()  # pylint: disable=protected-access
     _displays.clear()
 
 
@@ -725,7 +725,7 @@ class Group:
 
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
-                layer._fill_area(buffer)    # pylint: disable=protected-access
+                layer._fill_area(buffer)  # pylint: disable=protected-access
 
     @property
     def hidden(self):

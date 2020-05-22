@@ -43,6 +43,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 class BuiltinFont:
     """Simulate a font built into CircuitPython"""
+
     def __init__(self):
         self._font = ImageFont.load_default()
         ascii_chars = ""
@@ -92,6 +93,7 @@ class BuiltinFont:
 
 class Glyph:
     """Storage of glyph info"""
+
     def __init__(self, *, bitmap, tile_index, width, height, dx, dy, shift_x, shift_y):
         self.bitmap = bitmap
         self.width = width
