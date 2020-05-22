@@ -32,12 +32,14 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 _displays = []
 
 Rectangle = namedtuple("Rectangle", "x1 y1 x2 y2")
+AbsoluteTransform = namedtuple("AbsoluteTransform", "scale transposexy")
 
 
 def release_displays():
     """Releases any actively used displays so their busses and pins can be used again.
 
-    Use this once in your code.py if you initialize a display. Place it right before the initialization so the display is active as long as possible.
+    Use this once in your code.py if you initialize a display. Place it right before the
+    initialization so the display is active as long as possible.
     """
     for _disp in _displays:
         _disp._release()
@@ -48,7 +50,10 @@ class Bitmap:
     """Stores values of a certain size in a 2D array"""
 
     def __init__(self, width, height, value_count):
-        """Create a Bitmap object with the given fixed size. Each pixel stores a value that is used to index into a corresponding palette. This enables differently colored sprites to share the underlying Bitmap. value_count is used to minimize the memory used to store the Bitmap.
+        """Create a Bitmap object with the given fixed size. Each pixel stores a value that is
+        used to index into a corresponding palette. This enables differently colored sprites to
+        share the underlying Bitmap. value_count is used to minimize the memory used to store
+        the Bitmap.
         """
         self._width = width
         self._height = height
@@ -220,11 +225,20 @@ class ColorConverter:
 
 
 class Display:
-    """This initializes a display and connects it into CircuitPython. Unlike other objects in CircuitPython, Display objects live until ``displayio.release_displays()`` is called. This is done so that CircuitPython can use the display itself.
+    """This initializes a display and connects it into CircuitPython. Unlike other objects
+    in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
+    This is done so that CircuitPython can use the display itself.
 
-    Most people should not use this class directly. Use a specific display driver instead that will contain the initialization sequence at minimum.
+    Most people should not use this class directly. Use a specific display driver instead
+    that will contain the initialization sequence at minimum.
     
-    .. class:: Display(display_bus, init_sequence, *, width, height, colstart=0, rowstart=0, rotation=0, color_depth=16, grayscale=False, pixels_in_byte_share_row=True, bytes_per_cell=1, reverse_pixels_in_byte=False, set_column_command=0x2a, set_row_command=0x2b, write_ram_command=0x2c, set_vertical_scroll=0, backlight_pin=None, brightness_command=None, brightness=1.0, auto_brightness=False, single_byte_bounds=False, data_as_commands=False, auto_refresh=True, native_frames_per_second=60)
+    .. class::
+        Display(display_bus, init_sequence, *, width, height, colstart=0, rowstart=0, rotation=0,
+        color_depth=16, grayscale=False, pixels_in_byte_share_row=True, bytes_per_cell=1,
+        reverse_pixels_in_byte=False, set_column_command=0x2a, set_row_command=0x2b,
+        write_ram_command=0x2c, set_vertical_scroll=0, backlight_pin=None, brightness_command=None,
+        brightness=1.0, auto_brightness=False, single_byte_bounds=False, data_as_commands=False,
+        auto_refresh=True, native_frames_per_second=60)
     
     """
 
@@ -258,7 +272,11 @@ class Display:
     ):
         """Create a Display object on the given display bus (`displayio.FourWire` or `displayio.ParallelBus`).
 
-        The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins with a command byte followed by a byte to determine the parameter count and if a delay is need after. When the top bit of the second byte is 1, the next byte will be the delay time in milliseconds. The remaining 7 bits are the parameter count excluding any delay byte. The third through final bytes are the remaining command parameters. The next byte will begin a new command definition. Here is a portion of ILI9341 init code:
+        The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins with a command byte
+        followed by a byte to determine the parameter count and if a delay is need after. When the top bit of the
+        second byte is 1, the next byte will be the delay time in milliseconds. The remaining 7 bits are the
+        parameter count excluding any delay byte. The third through final bytes are the remaining command
+        parameters. The next byte will begin a new command definition. Here is a portion of ILI9341 init code:
         .. code-block:: python
         
             init_sequence = (b"\xe1\x0f\x00\x0E\x14\x03\x11\x07\x31\xC1\x48\x08\x0F\x0C\x31\x36\x0F" # Set Gamma
@@ -267,9 +285,12 @@ class Display:
             )
             display = displayio.Display(display_bus, init_sequence, width=320, height=240)
         
-        The first command is 0xe1 with 15 (0xf) parameters following. The second and third are 0x11 and 0x29 respectively with delays (0x80) of 120ms (0x78) and no parameters. Multiple byte literals (b”“) are merged together on load. The parens are needed to allow byte literals on subsequent lines.
+        The first command is 0xe1 with 15 (0xf) parameters following. The second and third are 0x11 and 0x29
+        respectively with delays (0x80) of 120ms (0x78) and no parameters. Multiple byte literals (b”“) are
+        merged together on load. The parens are needed to allow byte literals on subsequent lines.
 
-        The initialization sequence should always leave the display memory access inline with the scan of the display to minimize tearing artifacts.
+        The initialization sequence should always leave the display memory access inline with the scan of
+        the display to minimize tearing artifacts.
         """
         self._bus = display_bus
         self._set_column_command = set_column_command
@@ -326,16 +347,22 @@ class Display:
         self._bus = None
 
     def show(self, group):
-        """Switches to displaying the given group of layers. When group is None, the default CircuitPython terminal will be shown.
+        """Switches to displaying the given group of layers. When group is None, the
+        default CircuitPython terminal will be shown.
         """
         self._current_group = group
 
     def refresh(self, *, target_frames_per_second=60, minimum_frames_per_second=1):
-        """When auto refresh is off, waits for the target frame rate and then refreshes the display, returning True. If the call has taken too long since the last refresh call for the given target frame rate, then the refresh returns False immediately without updating the screen to hopefully help getting caught up.
+        """When auto refresh is off, waits for the target frame rate and then refreshes the display,
+        returning True. If the call has taken too long since the last refresh call for the given target
+        frame rate, then the refresh returns False immediately without updating the screen to hopefully
+        help getting caught up.
 
-        If the time since the last successful refresh is below the minimum frame rate, then an exception will be raised. Set minimum_frames_per_second to 0 to disable.
+        If the time since the last successful refresh is below the minimum frame rate, then an exception
+        will be raised. Set minimum_frames_per_second to 0 to disable.
 
-        When auto refresh is on, updates the display immediately. (The display will also update without calls to this.)
+        When auto refresh is on, updates the display immediately. (The display will also update without
+        calls to this.)
         """
         # Go through groups and and add each to buffer
         if self._current_group is not None:
@@ -411,7 +438,9 @@ class Display:
 
     @property
     def brightness(self):
-        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`. When `auto_brightness` is True, the value of `brightness` will change automatically. If `brightness` is set, `auto_brightness` will be disabled and will be set to False.
+        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`. When
+        `auto_brightness` is True, the value of `brightness` will change automatically. If `brightness`
+        is set, `auto_brightness` will be disabled and will be set to False.
         """
         return self._brightness
 
@@ -421,7 +450,10 @@ class Display:
 
     @property
     def auto_brightness(self):
-        """True when the display brightness is adjusted automatically, based on an ambient light sensor or other method. Note that some displays may have this set to True by default, but not actually implement automatic brightness adjustment. `auto_brightness` is set to False if `brightness` is set manually.
+        """True when the display brightness is adjusted automatically, based on an ambient light sensor
+        or other method. Note that some displays may have this set to True by default, but not actually
+        implement automatic brightness adjustment. `auto_brightness` is set to False if `brightness`
+        is set manually.
         """
         return self._auto_brightness
 
@@ -485,17 +517,24 @@ class EPaperDisplay:
         """
         Create a EPaperDisplay object on the given display bus (displayio.FourWire or displayio.ParallelBus).
 
-        The start_sequence and stop_sequence are bitpacked to minimize the ram impact. Every command begins with a command byte followed by a byte to determine the parameter count and if a delay is need after. When the top bit of the second byte is 1, the next byte will be the delay time in milliseconds. The remaining 7 bits are the parameter count excluding any delay byte. The third through final bytes are the remaining command parameters. The next byte will begin a new command definition.
+        The start_sequence and stop_sequence are bitpacked to minimize the ram impact. Every command
+        begins with a command byte followed by a byte to determine the parameter count and if a delay
+        is need after. When the top bit of the second byte is 1, the next byte will be the delay time
+        in milliseconds. The remaining 7 bits are the parameter count excluding any delay byte. The
+        third through final bytes are the remaining command parameters. The next byte will begin a
+        new command definition.
         """
         pass
 
     def show(self, group):
-        """Switches to displaying the given group of layers. When group is None, the default CircuitPython terminal will be shown.
+        """Switches to displaying the given group of layers. When group is None, the default CircuitPython
+        terminal will be shown.
         """
         pass
 
     def refresh(self):
-        """Refreshes the display immediately or raises an exception if too soon. Use ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur.
+        """Refreshes the display immediately or raises an exception if too soon. Use
+        ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur.
         """
         pass
 
@@ -535,7 +574,10 @@ class FourWire:
     ):
         """Create a FourWire object associated with the given pins.
 
-        The SPI bus and pins are then in use by the display until displayio.release_displays() is called even after a reload. (It does this so CircuitPython can use the display after your code is done.) So, the first time you initialize a display bus in code.py you should call :py:func`displayio.release_displays` first, otherwise it will error after the first code.py run.
+        The SPI bus and pins are then in use by the display until displayio.release_displays() is called
+        even after a reload. (It does this so CircuitPython can use the display after your code is done.)
+        So, the first time you initialize a display bus in code.py you should call
+        :py:func`displayio.release_displays` first, otherwise it will error after the first code.py run.
         """
         self._dc = digitalio.DigitalInOut(command)
         self._dc.switch_to_output()
@@ -702,13 +744,18 @@ class Group:
 
 
 class I2CDisplay:
-    """Manage updating a display over I2C in the background while Python code runs. It doesn’t handle display initialization.
+    """Manage updating a display over I2C in the background while Python code runs.
+    It doesn’t handle display initialization.
     """
 
     def __init__(self, i2c_bus, *, device_address, reset=None):
         """Create a I2CDisplay object associated with the given I2C bus and reset pin.
 
-        The I2C bus and pins are then in use by the display until displayio.release_displays() is called even after a reload. (It does this so CircuitPython can use the display after your code is done.) So, the first time you initialize a display bus in code.py you should call :py:func`displayio.release_displays` first, otherwise it will error after the first code.py run.
+        The I2C bus and pins are then in use by the display until displayio.release_displays() is
+        called even after a reload. (It does this so CircuitPython can use the display after your
+        code is done.) So, the first time you initialize a display bus in code.py you should call
+        :py:func`displayio.release_displays` first, otherwise it will error after the first
+        code.py run.
         """
         pass
 
@@ -739,7 +786,9 @@ class OnDiskBitmap:
 
 
 class Palette:
-    """Map a pixel palette_index to a full color. Colors are transformed to the display’s format internally to save memory."""
+    """Map a pixel palette_index to a full color. Colors are transformed to the display’s
+    format internally to save memory.
+    """
 
     def __init__(self, color_count):
         """Create a Palette object to store a set number of colors."""
@@ -772,9 +821,12 @@ class Palette:
         return len(self._colors)
 
     def __setitem__(self, index, value):
-        """Sets the pixel color at the given index. The index should be an integer in the range 0 to color_count-1.
+        """Sets the pixel color at the given index. The index should be
+        an integer in the range 0 to color_count-1.
 
-        The value argument represents a color, and can be from 0x000000 to 0xFFFFFF (to represent an RGB value). Value can be an int, bytes (3 bytes (RGB) or 4 bytes (RGB + pad byte)), bytearray, or a tuple or list of 3 integers.
+        The value argument represents a color, and can be from 0x000000 to 0xFFFFFF
+        (to represent an RGB value). Value can be an int, bytes (3 bytes (RGB) or
+        4 bytes (RGB + pad byte)), bytearray, or a tuple or list of 3 integers.
         """
         if self._colors[index]["rgb888"] != value:
             self._colors[index] = self._make_color(value)
@@ -798,14 +850,20 @@ class ParallelBus:
     """
 
     def __init__(self, i2c_bus, *, device_address, reset=None):
-        """Create a ParallelBus object associated with the given pins. The bus is inferred from data0 by implying the next 7 additional pins on a given GPIO port.
+        """Create a ParallelBus object associated with the given pins. The
+        bus is inferred from data0 by implying the next 7 additional pins on a given GPIO port.
 
-        The parallel bus and pins are then in use by the display until displayio.release_displays() is called even after a reload. (It does this so CircuitPython can use the display after your code is done.) So, the first time you initialize a display bus in code.py you should call :py:func`displayio.release_displays` first, otherwise it will error after the first code.py run.
+        The parallel bus and pins are then in use by the display until displayio.release_displays()
+        is called even after a reload. (It does this so CircuitPython can use the display after your
+        code is done.) So, the first time you initialize a display bus in code.py you should call
+        :py:func`displayio.release_displays` first, otherwise it will error after the first
+        code.py run.
         """
         pass
 
     def reset(self):
-        """Performs a hardware reset via the reset pin. Raises an exception if called when no reset pin is available.
+        """Performs a hardware reset via the reset pin. Raises an exception if called when
+        no reset pin is available.
         """
         pass
 
@@ -833,7 +891,8 @@ class Shape(Bitmap):
 
 
 class TileGrid:
-    """Position a grid of tiles sourced from a bitmap and pixel_shader combination. Multiple grids can share bitmaps and pixel shaders.
+    """Position a grid of tiles sourced from a bitmap and pixel_shader combination. Multiple
+    grids can share bitmaps and pixel shaders.
 
     A single tile grid is also known as a Sprite.
     """
@@ -851,7 +910,9 @@ class TileGrid:
         x=0,
         y=0
     ):
-        """Create a TileGrid object. The bitmap is source for 2d pixels. The pixel_shader is used to convert the value and its location to a display native pixel color. This may be a simple color palette lookup, a gradient, a pattern or a color transformer.
+        """Create a TileGrid object. The bitmap is source for 2d pixels. The pixel_shader is used to convert
+        the value and its location to a display native pixel color. This may be a simple color palette lookup,
+        a gradient, a pattern or a color transformer.
 
         tile_width and tile_height match the height of the bitmap by default.
         """
@@ -912,17 +973,10 @@ class TileGrid:
                         if not pixel_color["transparent"]:
                             image.putpixel((image_x, image_y), pixel_color["rgb888"])
 
-        # Apply transforms here
+        # Apply transforms or mirrors or whatever here
         if self._tile_width == 6:
             print("Putting at {}".format((self._x, self._y)))
         buffer.paste(image, (self._x, self._y))
-        """
-        Strategy
-        ------------
-        Draw on it
-        Do any transforms or mirrors or whatever
-        Paste into buffer at our x,y position
-        """
 
     @property
     def hidden(self):
