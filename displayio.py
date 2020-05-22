@@ -30,13 +30,8 @@ __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 _displays = []
-_groups = []
 
 Rectangle = namedtuple("Rectangle", "x1 y1 x2 y2")
-
-class _DisplayioSingleton:
-    def __init__(self):
-        pass
 
 
 def release_displays():
@@ -47,6 +42,7 @@ def release_displays():
     for _disp in _displays:
         _disp._release()
     _displays.clear()
+
 
 class Bitmap:
     """Stores values of a certain size in a 2D array"""
@@ -86,7 +82,9 @@ class Bitmap:
         an x,y tuple or an int equal to `y * width + x`.
         """
         if isinstance(index, (tuple, list)):
-            index = index[1] * self._width + index[0]
+            index = (index[1] * self._width) + index[0]
+        if index >= len(self._data):
+            raise ValueError("Index {} is out of range".format(index))
         return self._data[index]
 
     def __setitem__(self, index, value):
@@ -350,7 +348,7 @@ class Display:
         time.sleep(1)
         # Eventually calculate dirty rectangles here
         self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
-        
+
         for area in self._subrectangles:
             self._refresh_display_area(area)
 
@@ -367,16 +365,22 @@ class Display:
             | ((data[:, :, 1] & 0xFC) << 3)
             | (data[:, :, 2] >> 3)
         )
-        
-        pixels = list(numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist())
-        
+
+        pixels = list(
+            numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
+        )
+
         self._write(
             self._set_column_command,
-            self._encode_pos(rectangle.x1 + self._colstart, rectangle.x2 + self._colstart)
+            self._encode_pos(
+                rectangle.x1 + self._colstart, rectangle.x2 + self._colstart
+            ),
         )
         self._write(
             self._set_row_command,
-            self._encode_pos(rectangle.y1 + self._rowstart, rectangle.y2 + self._rowstart)
+            self._encode_pos(
+                rectangle.y1 + self._rowstart, rectangle.y2 + self._rowstart
+            ),
         )
         self._write(self._write_ram_command, pixels)
 
@@ -395,7 +399,9 @@ class Display:
     def auto_refresh(self, value):
         self._auto_refresh = value
         if self._refresh_thread is None:
-            self._refresh_thread = threading.Thread(target=self._refresh_loop, daemon=True)
+            self._refresh_thread = threading.Thread(
+                target=self._refresh_loop, daemon=True
+            )
         if value and not self._refresh_thread.is_alive():
             # Start the thread
             self._refresh_thread.start()
@@ -596,7 +602,6 @@ class Group:
         self._hidden = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
-        print("Creating Group")
 
     def append(self, layer):
         """Append a layer to the group. It will be drawn
@@ -732,13 +737,14 @@ class OnDiskBitmap:
         """Height of the bitmap. (read only)"""
         return self._image.height
 
+
 class Palette:
     """Map a pixel palette_index to a full color. Colors are transformed to the display’s format internally to save memory."""
 
     def __init__(self, color_count):
         """Create a Palette object to store a set number of colors."""
         self._needs_refresh = False
-        
+
         self._colors = []
         for _ in range(color_count):
             self._colors.append(self._make_color(0))
@@ -779,10 +785,11 @@ class Palette:
         return self._colors[index]
 
     def make_transparent(self, palette_index):
-        self._colors[palette_index].transparent = True
+        self._colors[palette_index]["transparent"] = True
 
     def make_opaque(self, palette_index):
-        self._colors[palette_index].transparent = False
+        self._colors[palette_index]["transparent"] = False
+
 
 class ParallelBus:
     """Manage updating a display over 8-bit parallel bus in the background while Python code runs.
@@ -853,15 +860,15 @@ class TileGrid:
         self._bitmap = bitmap
         bitmap_width = bitmap.width
         bitmap_height = bitmap.height
-        
+
         if not isinstance(pixel_shader, (ColorConverter, Palette)):
             raise ValueError("Unsupported Pixel Shader type")
         self._pixel_shader = pixel_shader
         self._hidden = False
         self._x = x
         self._y = y
-        self._width = width # Number of Tiles Wide
-        self._height = height # Number of Tiles High
+        self._width = width  # Number of Tiles Wide
+        self._height = height  # Number of Tiles High
         if tile_width is None:
             tile_width = bitmap_width
         if tile_height is None:
@@ -872,40 +879,50 @@ class TileGrid:
         if bitmap_height % tile_height != 0:
             raise ValueError("Tile height must exactly divide bitmap height")
         self._tile_height = tile_height
+        if not 0 <= default_tile <= 255:
+            raise ValueError("Default Tile is out of range")
         self._tiles = (self._width * self._height) * [default_tile]
 
     def _fill_area(self, buffer):
         """Draw onto the image"""
-        print("Drawing TileGrid")
         if self._hidden:
             return
-        
-        image = Image.new("RGB", (self._width * self._tile_width, self._height * self._tile_height))
-        
-        for tile_x in range(self._width):
-            for tile_y in range(self._height):
+
+        image = Image.new(
+            "RGB", (self._width * self._tile_width, self._height * self._tile_height)
+        )
+
+        tile_count_x = self._bitmap.width // self._tile_width
+        tile_count_y = self._bitmap.height // self._tile_height
+
+        for tile_x in range(0, self._width):
+            for tile_y in range(0, self._height):
                 tile_index = self._tiles[tile_y * self._width + tile_x]
-                tile_index_x = tile_index % self._width
-                tile_index_y = tile_index // self._width
+                tile_index_x = tile_index % tile_count_x
+                tile_index_y = tile_index // tile_count_x
                 for pixel_x in range(self._tile_width):
                     for pixel_y in range(self._tile_height):
                         image_x = tile_x * self._tile_width + pixel_x
                         image_y = tile_y * self._tile_height + pixel_y
                         bitmap_x = tile_index_x * self._tile_width + pixel_x
                         bitmap_y = tile_index_y * self._tile_height + pixel_y
-                        pixel_color = self._pixel_shader[self._bitmap[bitmap_x, bitmap_y]]
-                        image.putpixel((image_x, image_y), pixel_color["rgb888"])
+                        pixel_color = self._pixel_shader[
+                            self._bitmap[bitmap_x, bitmap_y]
+                        ]
+                        if not pixel_color["transparent"]:
+                            image.putpixel((image_x, image_y), pixel_color["rgb888"])
 
+        # Apply transforms here
+        if self._tile_width == 6:
+            print("Putting at {}".format((self._x, self._y)))
         buffer.paste(image, (self._x, self._y))
         """
         Strategy
         ------------
         Draw on it
-        Apply the palette
         Do any transforms or mirrors or whatever
         Paste into buffer at our x,y position
         """
-        
 
     @property
     def hidden(self):
@@ -994,7 +1011,7 @@ class TileGrid:
         elif ininstance(index, int):
             x = index % self._width
             y = index // self._width
-        if x > width or y > self._height or index > len(self._tiles):
+        if x > width or y > self._height or index >= len(self._tiles):
             raise ValueError("Tile index out of bounds")
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
