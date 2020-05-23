@@ -18,14 +18,14 @@ with open(path.join(here, "README.rst"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="adafruit-circuitpython-displayio",
+    name="adafruit-blinka-displayio",
     use_scm_version=True,
     setup_requires=["setuptools_scm"],
     description="displayio for Blinka",
     long_description=long_description,
     long_description_content_type="text/x-rst",
     # The project's main homepage.
-    url="https://github.com/adafruit/Adafruit_CircuitPython_displayio",
+    url="https://github.com/adafruit/Adafruit_Blinka_Displayio",
     # Author details
     author="Adafruit Industries",
     author_email="circuitpython@adafruit.com",
@@ -47,7 +47,5 @@ setup(
     keywords="adafruit blinka circuitpython micropython displayio lcd tft display pitft",
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    # TODO: IF LIBRARY FILES ARE A PACKAGE FOLDER,
-    #       CHANGE `py_modules=['...']` TO `packages=['...']`
-    py_modules=["adafruit_blinka_displayio"],
+    py_modules=["displayio", "fontio", "terminalio"],
 )

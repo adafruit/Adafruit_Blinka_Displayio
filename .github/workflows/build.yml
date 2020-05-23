@@ -45,7 +45,6 @@ jobs:
     - name: PyLint
       run: |
         pylint $( find . -path './*io.py' )
-        ([[ ! -d "examples" ]] || pylint --disable=missing-docstring,invalid-name,bad-whitespace $( find . -path "./examples/*.py" ))
     - name: Build docs
       working-directory: docs
       run: sphinx-build -E -W -b html . _build/html

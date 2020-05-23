@@ -1,7 +1,7 @@
 Introduction
 ============
 
-.. image:: https://readthedocs.org/projects/adafruit-blinka-circuitpython-displayio/badge/?version=latest
+.. image:: https://readthedocs.org/projects/adafruit-blinka-blinka-displayio/badge/?version=latest
     :target: https://circuitpython.readthedocs.io/projects/displayio/en/latest/
     :alt: Documentation Status
 
@@ -24,32 +24,23 @@ Dependencies
 =============
 This driver depends on:
 
-* `Adafruit CircuitPython <https://github.com/adafruit/circuitpython>`_
-
-Please ensure all dependencies are available on the CircuitPython filesystem.
-This is easily achieved by downloading
-`the Adafruit library and driver bundle <https://circuitpython.org/libraries>`_.
+* `Adafruit Blinka <https://github.com/adafruit/Adafruit_Blinka>`_
 
 Installing from PyPI
 =====================
-.. note:: This library is not available on PyPI yet. Install documentation is included
-   as a standard element. Stay tuned for PyPI availability!
-
-.. todo:: Remove the above note if PyPI version is/will be available at time of release.
-   If the library is not planned for PyPI, remove the entire 'Installing from PyPI' section.
 
 On supported GNU/Linux systems like the Raspberry Pi, you can install the driver locally `from
-PyPI <https://pypi.org/project/adafruit-circuitpython-displayio/>`_. To install for current user:
+PyPI <https://pypi.org/project/adafruit-blinka-displayio/>`_. To install for current user:
 
 .. code-block:: shell
 
-    pip3 install adafruit-circuitpython-displayio
+    pip3 install adafruit-blinka-displayio
 
 To install system-wide (this may be required in some cases):
 
 .. code-block:: shell
 
-    sudo pip3 install adafruit-circuitpython-displayio
+    sudo pip3 install adafruit-blinka-displayio
 
 To install in a virtual environment in your current project:
 
@@ -58,12 +49,7 @@ To install in a virtual environment in your current project:
     mkdir project-name && cd project-name
     python3 -m venv .env
     source .env/bin/activate
-    pip3 install adafruit-circuitpython-displayio
-
-Usage Example
-=============
-
-.. todo:: Add a quick, simple example. It and other examples should live in the examples folder and be included in docs/examples.rst.
+    pip3 install adafruit-blinka-displayio
 
 Contributing
 ============
@@ -75,4 +61,4 @@ before contributing to help this project stay welcoming.
 Documentation
 =============
 
-For information on building library documentation, please check out `this guide <https://learn.adafruit.com/creating-and-sharing-a-circuitpython-library/sharing-our-docs-on-readthedocs#sphinx-5-1>`_.
+For information on building library documentation, please check out `this guide <https://learn.adafruit.com/creating-and-sharing-a-blinka-library/sharing-our-docs-on-readthedocs#sphinx-5-1>`_.
