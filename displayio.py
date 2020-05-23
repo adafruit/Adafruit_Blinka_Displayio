@@ -336,7 +336,7 @@ class Display:
         self._brightness = brightness
         self._auto_refresh = auto_refresh
         self._initialize(init_sequence)
-        self._buffer = Image.new("RGBA", (width, height))
+        self._buffer = Image.new("RGB", (width, height))
         self._subrectangles = []
         self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
         self._current_group = None
@@ -941,23 +941,11 @@ class Palette:
         self._colors = []
         for _ in range(color_count):
             self._colors.append(self._make_color(0))
-            self._update_rgba(len(self._colors) - 1)
-
-    def _update_rgba(self, index):
-        color = self._colors[index]["rgb888"]
-        transparent = self._colors[index]["transparent"]
-        self._colors[index]["rgba"] = (
-            color >> 16,
-            (color >> 8) & 0xFF,
-            color & 0xFF,
-            0 if transparent else 0xFF,
-        )
 
     def _make_color(self, value, transparent=False):
         color = {
             "transparent": transparent,
             "rgb888": 0,
-            "rgba": (0, 0, 0, 255),
         }
         if isinstance(value, (tuple, list, bytes, bytearray)):
             value = (value[0] & 0xFF) << 16 | (value[1] & 0xFF) << 8 | value[2] & 0xFF
@@ -985,7 +973,6 @@ class Palette:
         """
         if self._colors[index]["rgb888"] != value:
             self._colors[index] = self._make_color(value)
-            self._update_rgba(index)
 
     def __getitem__(self, index):
         if not 0 <= index < len(self._colors):
@@ -995,12 +982,10 @@ class Palette:
     def make_transparent(self, palette_index):
         """Set the palette index to be a transparent color"""
         self._colors[palette_index]["transparent"] = True
-        self._update_rgba(palette_index)
 
     def make_opaque(self, palette_index):
         """Set the palette index to be an opaque color"""
         self._colors[palette_index]["transparent"] = False
-        self._update_rgba(palette_index)
 
 
 class ParallelBus:
@@ -1197,14 +1182,14 @@ class TileGrid:
             return
 
         image = Image.new(
-            "RGBA", (self._width * self._tile_width, self._height * self._tile_height)
+            "RGBA",
+            (self._width * self._tile_width, self._height * self._tile_height),
+            (0, 0, 0, 0),
         )
 
         tile_count_x = self._bitmap.width // self._tile_width
         x = self._x
         y = self._y
-
-        # TODO: Fix transparency
 
         for tile_x in range(0, self._width):
             for tile_y in range(0, self._height):
@@ -1220,8 +1205,8 @@ class TileGrid:
                         pixel_color = self._pixel_shader[
                             self._bitmap[bitmap_x, bitmap_y]
                         ]
-                        image.putpixel((image_x, image_y), pixel_color["rgba"])
-
+                        if not pixel_color["transparent"]:
+                            image.putpixel((image_x, image_y), pixel_color["rgb888"])
         if self._absolute_transform is not None:
             if self._absolute_transform.scale > 1:
                 image = image.resize(
@@ -1241,7 +1226,7 @@ class TileGrid:
             y *= self._absolute_transform.dy
             x += self._absolute_transform.x
             y += self._absolute_transform.y
-        buffer.paste(image, (x, y))
+        buffer.alpha_composite(image, (x, y))
 
     # pylint: enable=too-many-locals
 
