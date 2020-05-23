@@ -44,6 +44,7 @@ jobs:
         black --check --target-version=py35 .
     - name: PyLint
       run: |
+        pylint $( find . -path './*io/*.py' )
         pylint $( find . -path './*io.py' )
     - name: Build docs
       working-directory: docs
