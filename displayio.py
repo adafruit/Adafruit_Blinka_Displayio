@@ -38,10 +38,10 @@ displayio for Blinka
 import time
 import struct
 import threading
-import numpy
 import digitalio
 from PIL import Image
 from recordclass import recordclass
+import numpy
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
