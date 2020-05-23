@@ -1,3 +1,4 @@
 Adafruit-Blinka
 pillow
+numpy
 recordclass
