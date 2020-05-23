@@ -46,16 +46,23 @@ class BuiltinFont:
 
     def __init__(self):
         self._font = ImageFont.load_default()
-        ascii_chars = ""
-        for character in range(0x20, 0x7F):
-            ascii_chars += chr(character)
-        self._font.getmask(ascii_chars)
-        bmp_size = self._font.getsize(ascii_chars)
-        self._bitmap = Bitmap(bmp_size[0], bmp_size[1], 2)
-        ascii_mask = self._font.getmask(ascii_chars, mode="1")
-        for x in range(bmp_size[0]):
-            for y in range(bmp_size[1]):
-                self._bitmap[x, y] = 1 if ascii_mask.getpixel((x, y)) else 0
+        self._generate_bitmap(0x20, 0x7E)
+
+    def _generate_bitmap(self, start_range, end_range):
+        char_width, char_height = self.get_bounding_box()
+        self._bitmap = Bitmap(
+            char_width * (end_range - start_range + 1), char_height, 2
+        )
+        for character in range(start_range, end_range + 1):
+            ascii_char = chr(character)
+            ascii_mask = self._font.getmask(ascii_char, mode="1")
+            for y in range(char_height):
+                for x in range(char_width):
+                    color = ascii_mask.getpixel((x, y))
+                    character_position = character - start_range
+                    self._bitmap[character_position * char_width + x, y] = (
+                        1 if color else 0
+                    )
 
     def get_bounding_box(self):
         """Returns the maximum bounds of all glyphs in the font in
