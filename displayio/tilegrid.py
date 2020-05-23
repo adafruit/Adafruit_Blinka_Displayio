@@ -200,22 +200,23 @@ class TileGrid:
         x = self._x
         y = self._y
 
-        for tile_x in range(0, self._width):
-            for tile_y in range(0, self._height):
+        for tile_x in range(self._width):
+            for tile_y in range(self._height):
                 tile_index = self._tiles[tile_y * self._width + tile_x]
                 tile_index_x = tile_index % tile_count_x
                 tile_index_y = tile_index // tile_count_x
                 for pixel_x in range(self._tile_width):
                     for pixel_y in range(self._tile_height):
-                        image_x = tile_x * self._tile_width + pixel_x
-                        image_y = tile_y * self._tile_height + pixel_y
-                        bitmap_x = tile_index_x * self._tile_width + pixel_x
-                        bitmap_y = tile_index_y * self._tile_height + pixel_y
+                        image_x = (tile_x * self._tile_width) + pixel_x
+                        image_y = (tile_y * self._tile_height) + pixel_y
+                        bitmap_x = (tile_index_x * self._tile_width) + pixel_x
+                        bitmap_y = (tile_index_y * self._tile_height) + pixel_y
                         pixel_color = self._pixel_shader[
                             self._bitmap[bitmap_x, bitmap_y]
                         ]
-                        if not pixel_color["transparent"]:
-                            image.putpixel((image_x, image_y), pixel_color["rgb888"])
+                        # if not pixel_color["transparent"]:
+                        image.putpixel((image_x, image_y), pixel_color["rgba"])
+
         if self._absolute_transform is not None:
             if self._absolute_transform.scale > 1:
                 image = image.resize(

@@ -51,11 +51,23 @@ class Palette:
         self._colors = []
         for _ in range(color_count):
             self._colors.append(self._make_color(0))
+            self._update_rgba(len(self._colors) - 1)
+
+    def _update_rgba(self, index):
+        color = self._colors[index]["rgb888"]
+        transparent = self._colors[index]["transparent"]
+        self._colors[index]["rgba"] = (
+            color >> 16,
+            (color >> 8) & 0xFF,
+            color & 0xFF,
+            0 if transparent else 0xFF,
+        )
 
     def _make_color(self, value, transparent=False):
         color = {
             "transparent": transparent,
             "rgb888": 0,
+            "rgba": (0, 0, 0, 255),
         }
         if isinstance(value, (tuple, list, bytes, bytearray)):
             value = (value[0] & 0xFF) << 16 | (value[1] & 0xFF) << 8 | value[2] & 0xFF
@@ -83,6 +95,7 @@ class Palette:
         """
         if self._colors[index]["rgb888"] != value:
             self._colors[index] = self._make_color(value)
+            self._update_rgba(index)
 
     def __getitem__(self, index):
         if not 0 <= index < len(self._colors):
@@ -92,7 +105,9 @@ class Palette:
     def make_transparent(self, palette_index):
         """Set the palette index to be a transparent color"""
         self._colors[palette_index]["transparent"] = True
+        self._update_rgba(palette_index)
 
     def make_opaque(self, palette_index):
         """Set the palette index to be an opaque color"""
         self._colors[palette_index]["transparent"] = False
+        self._update_rgba(palette_index)
