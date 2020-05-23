@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.group`
 ================================================================================
 
 displayio for Blinka
@@ -35,11 +35,14 @@ displayio for Blinka
 
 """
 
+from recordclass import recordclass
 from displayio.tilegrid import TileGrid
-from displayio import Transform
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+
+Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
 
 class Group:

@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.i2cdisplay`
 ================================================================================
 
 displayio for Blinka

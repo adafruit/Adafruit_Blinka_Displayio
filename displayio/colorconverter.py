@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.colorconverter`
 ================================================================================
 
 displayio for Blinka

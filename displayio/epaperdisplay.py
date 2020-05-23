@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.epaperdisplay`
 ================================================================================
 
 displayio for Blinka
@@ -37,16 +37,18 @@ displayio for Blinka
 
 import time
 import digitalio
+from recordclass import recordclass
 from PIL import Image
 from displayio.bitmap import Bitmap
 from displayio.colorconverter import ColorConverter
-from displayio import Rectangle
-from displayio import Transform
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 # pylint: disable=unnecessary-pass, unused-argument
+
+Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
+Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
 
 class EPaperDisplay:

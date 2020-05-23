@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.ondiskbitmap`
 ================================================================================
 
 displayio for Blinka

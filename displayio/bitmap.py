@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.bitmap`
 ================================================================================
 
 displayio for Blinka
@@ -35,10 +35,12 @@ displayio for Blinka
 
 """
 
-from displayio import Rectangle
+from recordclass import recordclass
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 
 
 class Bitmap:

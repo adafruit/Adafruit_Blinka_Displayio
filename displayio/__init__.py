@@ -35,14 +35,6 @@ displayio for Blinka
 
 """
 
-import time
-import struct
-import threading
-import digitalio
-from PIL import Image
-import numpy
-from recordclass import recordclass
-
 from displayio.bitmap import Bitmap
 from displayio.colorconverter import ColorConverter
 from displayio.display import Display
@@ -55,14 +47,10 @@ from displayio.palette import Palette
 from displayio.parallelbus import ParallelBus
 from displayio.shape import Shape
 from displayio.tilegrid import TileGrid
+from displayio.display import displays
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
-displays = []
-
-Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
-Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
 
 def release_displays():

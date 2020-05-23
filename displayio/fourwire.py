@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.fourwire`
 ================================================================================
 
 displayio for Blinka

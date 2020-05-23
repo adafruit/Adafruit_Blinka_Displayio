@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.palette`
 ================================================================================
 
 displayio for Blinka

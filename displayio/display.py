@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.display`
 ================================================================================
 
 displayio for Blinka
@@ -40,11 +40,13 @@ import struct
 import threading
 from PIL import Image
 import numpy
-from displayio import Rectangle
-from displayio import displays
+from recordclass import recordclass
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
+displays = []
 
 # pylint: disable=unnecessary-pass, unused-argument
 

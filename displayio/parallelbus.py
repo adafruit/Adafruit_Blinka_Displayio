@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 """
-`displayio`
+`displayio.parallelbus`
 ================================================================================
 
 displayio for Blinka
