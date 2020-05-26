@@ -41,6 +41,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 # pylint: disable=unnecessary-pass, unused-argument
 
+
 class EPaperDisplay:
     """Manage updating an epaper display over a display bus
 
