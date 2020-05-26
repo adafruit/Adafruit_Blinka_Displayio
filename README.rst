@@ -1,16 +1,16 @@
 Introduction
 ============
 
-.. image:: https://readthedocs.org/projects/adafruit-blinka-blinka-displayio/badge/?version=latest
-    :target: https://circuitpython.readthedocs.io/projects/displayio/en/latest/
+.. image:: https://readthedocs.org/projects/adafruit-blinka-displayio/badge/?version=latest
+    :target: https://adafruit-blinka-displayio.readthedocs.io/en/latest/
     :alt: Documentation Status
 
 .. image:: https://img.shields.io/discord/327254708534116352.svg
     :target: https://discord.gg/nBQh6qu
     :alt: Discord
 
-.. image:: https://github.com/adafruit/Adafruit_blinka_CircuitPython_displayio/workflows/Build%20CI/badge.svg
-    :target: https://github.com/adafruit/Adafruit_blinka_CircuitPython_displayio/actions
+.. image:: https://github.com/adafruit/Adafruit_Blinka_Displayio/workflows/Build%20CI/badge.svg
+    :target: https://github.com/adafruit/Adafruit_Blinka_Displayio/actions
     :alt: Build Status
 
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
