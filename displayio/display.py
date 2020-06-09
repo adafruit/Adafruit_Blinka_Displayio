@@ -204,7 +204,7 @@ class Display:
             self._current_group._fill_area(buffer)  # pylint: disable=protected-access
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
-        time.sleep(1)
+
         # Eventually calculate dirty rectangles here
         self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
 
@@ -231,13 +231,13 @@ class Display:
         self._write(
             self._set_column_command,
             self._encode_pos(
-                rectangle.x1 + self._colstart, rectangle.x2 + self._colstart
+                rectangle.x1 + self._colstart, rectangle.x2 + self._colstart - 1
             ),
         )
         self._write(
             self._set_row_command,
             self._encode_pos(
-                rectangle.y1 + self._rowstart, rectangle.y2 + self._rowstart
+                rectangle.y1 + self._rowstart, rectangle.y2 + self._rowstart - 1
             ),
         )
         self._write(self._write_ram_command, pixels)
