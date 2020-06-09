@@ -45,7 +45,6 @@ from recordclass import recordclass
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 displays = []
 
