@@ -217,7 +217,11 @@ class Display:
 
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
-        data = numpy.array(self._buffer.crop(rectangle).convert("RGB")).astype("uint16")
+
+        img = self._buffer.crop(rectangle).convert("RGB")
+        img = img.rotate(self._rotation)
+
+        data = numpy.array(img).astype("uint16")
         color = (
             ((data[:, :, 0] & 0xF8) << 8)
             | ((data[:, :, 1] & 0xFC) << 3)
@@ -228,19 +232,49 @@ class Display:
             numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
         )
 
+        display_rectangle = self._apply_rotation(rectangle)
+
         self._write(
             self._set_column_command,
             self._encode_pos(
-                rectangle.x1 + self._colstart, rectangle.x2 + self._colstart - 1
+                display_rectangle.x1 + self._colstart,
+                display_rectangle.x2 + self._colstart - 1,
             ),
         )
         self._write(
             self._set_row_command,
             self._encode_pos(
-                rectangle.y1 + self._rowstart, rectangle.y2 + self._rowstart - 1
+                display_rectangle.y1 + self._rowstart,
+                display_rectangle.y2 + self._rowstart - 1,
             ),
         )
+
         self._write(self._write_ram_command, pixels)
+
+    def _apply_rotation(self, rectangle):
+        """Adjust the rectangle coordinates based on rotation"""
+        if self._rotation == 90:
+            return Rectangle(
+                self._width - rectangle.y2,
+                rectangle.x1,
+                self._width - rectangle.y1,
+                rectangle.x2,
+            )
+        if self._rotation == 180:
+            return Rectangle(
+                self._width - rectangle.x2,
+                self._height - rectangle.y2,
+                self._width - rectangle.x1,
+                self._height - rectangle.y1,
+            )
+        if self._rotation == 270:
+            return Rectangle(
+                rectangle.y1,
+                self._height - rectangle.x2,
+                rectangle.y2,
+                self._height - rectangle.x1,
+            )
+        return rectangle
 
     def _encode_pos(self, x, y):
         """Encode a postion into bytes."""
