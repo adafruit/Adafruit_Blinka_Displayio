@@ -218,8 +218,11 @@ class Display:
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
 
-        img = self._buffer.crop(rectangle).convert("RGB")
-        img = img.rotate(self._rotation)
+        img = self._buffer.convert("RGB").crop(rectangle)
+        img = img.rotate(self._rotation, expand=True)
+
+        display_rectangle = self._apply_rotation(rectangle)
+        img = img.crop(self._clip(display_rectangle))
 
         data = numpy.array(img).astype("uint16")
         color = (
@@ -231,8 +234,6 @@ class Display:
         pixels = list(
             numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
         )
-
-        display_rectangle = self._apply_rotation(rectangle)
 
         self._write(
             self._set_column_command,
@@ -251,13 +252,30 @@ class Display:
 
         self._write(self._write_ram_command, pixels)
 
+    def _clip(self, rectangle):
+        if self._rotation in (90, 270):
+            width, height = self._height, self._width
+        else:
+            width, height = self._width, self._height
+
+        if rectangle.x1 < 0:
+            rectangle.x1 = 0
+        if rectangle.y1 < 0:
+            rectangle.y1 = 0
+        if rectangle.x2 > width:
+            rectangle.x2 = width
+        if rectangle.y2 > height:
+            rectangle.y2 = height
+
+        return rectangle
+
     def _apply_rotation(self, rectangle):
         """Adjust the rectangle coordinates based on rotation"""
         if self._rotation == 90:
             return Rectangle(
-                self._width - rectangle.y2,
+                self._height - rectangle.y2,
                 rectangle.x1,
-                self._width - rectangle.y1,
+                self._height - rectangle.y1,
                 rectangle.x2,
             )
         if self._rotation == 180:
@@ -270,9 +288,9 @@ class Display:
         if self._rotation == 270:
             return Rectangle(
                 rectangle.y1,
-                self._height - rectangle.x2,
+                self._width - rectangle.x2,
                 rectangle.y2,
-                self._height - rectangle.x1,
+                self._width - rectangle.x1,
             )
         return rectangle
 
