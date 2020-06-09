@@ -45,6 +45,7 @@ from recordclass import recordclass
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
+Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 displays = []
 
@@ -135,7 +136,7 @@ class Display:
         self._height = height
         self._colstart = colstart
         self._rowstart = rowstart
-        self._rotation = rotation
+        self._rotation = 0
         self._auto_brightness = auto_brightness
         self._brightness = brightness
         self._auto_refresh = auto_refresh
@@ -144,6 +145,7 @@ class Display:
         self._subrectangles = []
         self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
         self._current_group = None
+        self.rotation = rotation
         displays.append(self)
         self._refresh_thread = None
         if self._auto_refresh:
@@ -218,8 +220,11 @@ class Display:
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
 
-        img = self._buffer.crop(rectangle).convert("RGB")
-        img = img.rotate(self._rotation)
+        img = self._buffer.convert("RGB").crop(rectangle)
+        img = img.rotate(self._rotation, expand=True)
+
+        display_rectangle = self._apply_rotation(rectangle)
+        img = img.crop(self._clip(display_rectangle))
 
         data = numpy.array(img).astype("uint16")
         color = (
@@ -231,8 +236,6 @@ class Display:
         pixels = list(
             numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
         )
-
-        display_rectangle = self._apply_rotation(rectangle)
 
         self._write(
             self._set_column_command,
@@ -251,13 +254,30 @@ class Display:
 
         self._write(self._write_ram_command, pixels)
 
+    def _clip(self, rectangle):
+        if self._rotation in (90, 270):
+            width, height = self._height, self._width
+        else:
+            width, height = self._width, self._height
+
+        if rectangle.x1 < 0:
+            rectangle.x1 = 0
+        if rectangle.y1 < 0:
+            rectangle.y1 = 0
+        if rectangle.x2 > width:
+            rectangle.x2 = width
+        if rectangle.y2 > height:
+            rectangle.y2 = height
+
+        return rectangle
+
     def _apply_rotation(self, rectangle):
         """Adjust the rectangle coordinates based on rotation"""
         if self._rotation == 90:
             return Rectangle(
-                self._width - rectangle.y2,
+                self._height - rectangle.y2,
                 rectangle.x1,
-                self._width - rectangle.y1,
+                self._height - rectangle.y1,
                 rectangle.x2,
             )
         if self._rotation == 180:
@@ -270,9 +290,9 @@ class Display:
         if self._rotation == 270:
             return Rectangle(
                 rectangle.y1,
-                self._height - rectangle.x2,
+                self._width - rectangle.x2,
                 rectangle.y2,
-                self._height - rectangle.x1,
+                self._width - rectangle.x1,
             )
         return rectangle
 
