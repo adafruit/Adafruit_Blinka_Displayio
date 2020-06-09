@@ -135,7 +135,7 @@ class Display:
         self._height = height
         self._colstart = colstart
         self._rowstart = rowstart
-        self._rotation = 0
+        self._rotation = rotation
         self._auto_brightness = auto_brightness
         self._brightness = brightness
         self._auto_refresh = auto_refresh
@@ -144,7 +144,6 @@ class Display:
         self._subrectangles = []
         self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
         self._current_group = None
-        self.rotation = rotation
         displays.append(self)
         self._refresh_thread = None
         if self._auto_refresh:
