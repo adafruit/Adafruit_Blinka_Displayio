@@ -38,6 +38,7 @@ displayio for Blinka
 import time
 import struct
 import threading
+import digitalio
 from PIL import Image
 import numpy
 from recordclass import recordclass
@@ -47,6 +48,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 displays = []
+
+BACKLIGHT_IN_OUT = 1
+BACKLIGHT_PWM = 2
 
 # pylint: disable=unnecessary-pass, unused-argument
 
@@ -137,7 +141,7 @@ class Display:
         self._rowstart = rowstart
         self._rotation = rotation
         self._auto_brightness = auto_brightness
-        self._brightness = brightness
+        self._brightness = 1.0
         self._auto_refresh = auto_refresh
         self._initialize(init_sequence)
         self._buffer = Image.new("RGB", (width, height))
@@ -148,6 +152,13 @@ class Display:
         self._refresh_thread = None
         if self._auto_refresh:
             self.auto_refresh = True
+
+        self._backlight_type = None
+        if backlight_pin is not None:
+            self._backlight_type = BACKLIGHT_IN_OUT
+            self._backlight = digitalio.DigitalInOut(backlight_pin)
+            self._backlight.switch_to_output()
+            self.brightness = brightness
 
     # pylint: enable=too-many-locals
 
@@ -331,7 +342,15 @@ class Display:
 
     @brightness.setter
     def brightness(self, value):
-        self._brightness = value
+        print("Brightness set")
+        if 0 <= float(value) <= 1.0:
+            self._brightness = value
+            if self._backlight_type == BACKLIGHT_IN_OUT:
+                self._backlight.value = int(round(self._brightness))
+                print(int(round(self._brightness)))
+            # PWM not currently implemented
+        else:
+            raise ValueError("Brightness must be between 0.0 and 1.0")
 
     @property
     def auto_brightness(self):
