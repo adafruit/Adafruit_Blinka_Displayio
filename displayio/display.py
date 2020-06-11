@@ -169,6 +169,7 @@ class Display:
             data_size = init_sequence[i + 1]
             delay = (data_size & 0x80) > 0
             data_size &= ~0x80
+
             self._write(command, init_sequence[i + 2 : i + 2 + data_size])
             delay_time_ms = 10
             if delay:
@@ -180,11 +181,15 @@ class Display:
             i += 2 + data_size
 
     def _write(self, command, data):
-        if self._single_byte_bounds:
-            self._bus.send(True, bytes([command]) + data, toggle_every_byte=True)
+        self._bus.begin_transaction()
+        if self._data_as_commands:
+            if command is not None:
+                self._bus.send(True, bytes([command]), toggle_every_byte=True)
+            self._bus.send(command is not None, data)
         else:
             self._bus.send(True, bytes([command]), toggle_every_byte=True)
             self._bus.send(False, data)
+        self._bus.end_transaction()
 
     def _release(self):
         self._bus.release()
@@ -261,7 +266,10 @@ class Display:
             ),
         )
 
-        self._write(self._write_ram_command, pixels)
+        if self._data_as_commands:
+            self._write(None, pixels)
+        else:
+            self._write(self._write_ram_command, pixels)
 
     def _clip(self, rectangle):
         if self._rotation in (90, 270):
@@ -342,13 +350,12 @@ class Display:
 
     @brightness.setter
     def brightness(self, value):
-        print("Brightness set")
         if 0 <= float(value) <= 1.0:
             self._brightness = value
             if self._backlight_type == BACKLIGHT_IN_OUT:
                 self._backlight.value = int(round(self._brightness))
-                print(int(round(self._brightness)))
             # PWM not currently implemented
+            # Command-based brightness not implemented
         else:
             raise ValueError("Brightness must be between 0.0 and 1.0")
 
