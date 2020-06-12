@@ -82,9 +82,13 @@ class TileGrid:
         bitmap_width = bitmap.width
         bitmap_height = bitmap.height
 
-        if not isinstance(pixel_shader, (ColorConverter, Palette)):
+        if pixel_shader is not None and not isinstance(
+            pixel_shader, (ColorConverter, Palette)
+        ):
             raise ValueError("Unsupported Pixel Shader type")
         self._pixel_shader = pixel_shader
+        if isinstance(self._pixel_shader, ColorConverter):
+            self._pixel_shader.rgba = True
         self._hidden = False
         self._x = x
         self._y = y
@@ -93,6 +97,8 @@ class TileGrid:
         self._transpose_xy = False
         self._flip_x = False
         self._flip_y = False
+        self._top_left_x = 0
+        self._top_left_y = 0
         if tile_width is None:
             tile_width = bitmap_width
         if tile_height is None:
@@ -184,6 +190,13 @@ class TileGrid:
                     self._current_area.y1,
                 )
 
+    def _shade(self, pixel_value):
+        if isinstance(self._pixel_shader, Palette):
+            return self._pixel_shader[pixel_value]["rgba"]
+        if isinstance(self._pixel_shader, ColorConverter):
+            return self._pixel_shader.convert(pixel_value)
+        return pixel_value
+
     # pylint: disable=too-many-locals
     def _fill_area(self, buffer):
         """Draw onto the image"""
@@ -211,11 +224,8 @@ class TileGrid:
                         image_y = (tile_y * self._tile_height) + pixel_y
                         bitmap_x = (tile_index_x * self._tile_width) + pixel_x
                         bitmap_y = (tile_index_y * self._tile_height) + pixel_y
-                        pixel_color = self._pixel_shader[
-                            self._bitmap[bitmap_x, bitmap_y]
-                        ]
-                        # if not pixel_color["transparent"]:
-                        image.putpixel((image_x, image_y), pixel_color["rgba"])
+                        pixel_color = self._shade(self._bitmap[bitmap_x, bitmap_y])
+                        image.putpixel((image_x, image_y), pixel_color)
 
         if self._absolute_transform is not None:
             if self._absolute_transform.scale > 1:
