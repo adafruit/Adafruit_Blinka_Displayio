@@ -50,7 +50,7 @@ class OnDiskBitmap:
     image is visible."""
 
     def __init__(self, file):
-        self._image = Image.open(file)
+        self._image = Image.open(file).convert("RGBA")
 
     @property
     def width(self):
@@ -61,3 +61,19 @@ class OnDiskBitmap:
     def height(self):
         """Height of the bitmap. (read only)"""
         return self._image.height
+
+    def __getitem__(self, index):
+        """
+        Returns the value at the given index. The index can either be
+        an x,y tuple or an int equal to `y * width + x`.
+        """
+        if isinstance(index, (tuple, list)):
+            x = index[0]
+            y = index[1]
+        elif isinstance(index, int):
+            x = index % self._image._width
+            y = index // self._image._width
+        if not 0 <= x < self._image.width or not 0 <= y < self._image.height:
+            return 0
+
+        return self._image.getpixel((x, y))
