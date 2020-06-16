@@ -68,9 +68,12 @@ class FourWire:
         first code.py run.
         """
         self._dc = digitalio.DigitalInOut(command)
-        self._dc.switch_to_output()
+        self._dc.switch_to_output(value=False)
         self._chip_select = digitalio.DigitalInOut(chip_select)
         self._chip_select.switch_to_output(value=True)
+        self._frequency = baudrate
+        self._polarity = polarity
+        self._phase = phase
 
         if reset is not None:
             self._reset = digitalio.DigitalInOut(reset)
@@ -78,10 +81,6 @@ class FourWire:
         else:
             self._reset = None
         self._spi = spi_bus
-        while self._spi.try_lock():
-            pass
-        self._spi.configure(baudrate=baudrate, polarity=polarity, phase=phase)
-        self._spi.unlock()
 
     def _release(self):
         self.reset()
@@ -108,8 +107,6 @@ class FourWire:
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
-        while self._spi.try_lock():
-            pass
         self._dc.value = not is_command
         if toggle_every_byte:
             for byte in data:
@@ -119,4 +116,20 @@ class FourWire:
                 self._chip_select.value = False
         else:
             self._spi.write(data)
+
+    def begin_transaction(self):
+        """Begin the SPI transaction by locking, configuring, and setting Chip Select
+        """
+        if not self._spi.try_lock():
+            return False
+        self._spi.configure(
+            baudrate=self._frequency, polarity=self._polarity, phase=self._phase
+        )
+        self._chip_select.value = False
+        return True
+
+    def end_transaction(self):
+        """End the SPI transaction by unlocking and setting Chip Select
+        """
+        self._chip_select.value = True
         self._spi.unlock()

@@ -38,6 +38,7 @@ displayio for Blinka
 import time
 import struct
 import threading
+import digitalio
 from PIL import Image
 import numpy
 from recordclass import recordclass
@@ -47,6 +48,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 displays = []
+
+BACKLIGHT_IN_OUT = 1
+BACKLIGHT_PWM = 2
 
 # pylint: disable=unnecessary-pass, unused-argument
 
@@ -137,7 +141,7 @@ class Display:
         self._rowstart = rowstart
         self._rotation = rotation
         self._auto_brightness = auto_brightness
-        self._brightness = brightness
+        self._brightness = 1.0
         self._auto_refresh = auto_refresh
         self._initialize(init_sequence)
         self._buffer = Image.new("RGB", (width, height))
@@ -149,6 +153,13 @@ class Display:
         if self._auto_refresh:
             self.auto_refresh = True
 
+        self._backlight_type = None
+        if backlight_pin is not None:
+            self._backlight_type = BACKLIGHT_IN_OUT
+            self._backlight = digitalio.DigitalInOut(backlight_pin)
+            self._backlight.switch_to_output()
+            self.brightness = brightness
+
     # pylint: enable=too-many-locals
 
     def _initialize(self, init_sequence):
@@ -158,6 +169,7 @@ class Display:
             data_size = init_sequence[i + 1]
             delay = (data_size & 0x80) > 0
             data_size &= ~0x80
+
             self._write(command, init_sequence[i + 2 : i + 2 + data_size])
             delay_time_ms = 10
             if delay:
@@ -169,11 +181,15 @@ class Display:
             i += 2 + data_size
 
     def _write(self, command, data):
-        if self._single_byte_bounds:
-            self._bus.send(True, bytes([command]) + data, toggle_every_byte=True)
+        self._bus.begin_transaction()
+        if self._data_as_commands:
+            if command is not None:
+                self._bus.send(True, bytes([command]), toggle_every_byte=True)
+            self._bus.send(command is not None, data)
         else:
             self._bus.send(True, bytes([command]), toggle_every_byte=True)
             self._bus.send(False, data)
+        self._bus.end_transaction()
 
     def _release(self):
         self._bus.release()
@@ -218,8 +234,11 @@ class Display:
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
 
-        img = self._buffer.crop(rectangle).convert("RGB")
-        img = img.rotate(self._rotation)
+        img = self._buffer.convert("RGB").crop(rectangle)
+        img = img.rotate(self._rotation, expand=True)
+
+        display_rectangle = self._apply_rotation(rectangle)
+        img = img.crop(self._clip(display_rectangle))
 
         data = numpy.array(img).astype("uint16")
         color = (
@@ -231,8 +250,6 @@ class Display:
         pixels = list(
             numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
         )
-
-        display_rectangle = self._apply_rotation(rectangle)
 
         self._write(
             self._set_column_command,
@@ -249,15 +266,35 @@ class Display:
             ),
         )
 
-        self._write(self._write_ram_command, pixels)
+        if self._data_as_commands:
+            self._write(None, pixels)
+        else:
+            self._write(self._write_ram_command, pixels)
+
+    def _clip(self, rectangle):
+        if self._rotation in (90, 270):
+            width, height = self._height, self._width
+        else:
+            width, height = self._width, self._height
+
+        if rectangle.x1 < 0:
+            rectangle.x1 = 0
+        if rectangle.y1 < 0:
+            rectangle.y1 = 0
+        if rectangle.x2 > width:
+            rectangle.x2 = width
+        if rectangle.y2 > height:
+            rectangle.y2 = height
+
+        return rectangle
 
     def _apply_rotation(self, rectangle):
         """Adjust the rectangle coordinates based on rotation"""
         if self._rotation == 90:
             return Rectangle(
-                self._width - rectangle.y2,
+                self._height - rectangle.y2,
                 rectangle.x1,
-                self._width - rectangle.y1,
+                self._height - rectangle.y1,
                 rectangle.x2,
             )
         if self._rotation == 180:
@@ -270,9 +307,9 @@ class Display:
         if self._rotation == 270:
             return Rectangle(
                 rectangle.y1,
-                self._height - rectangle.x2,
+                self._width - rectangle.x2,
                 rectangle.y2,
-                self._height - rectangle.x1,
+                self._width - rectangle.x1,
             )
         return rectangle
 
@@ -313,7 +350,14 @@ class Display:
 
     @brightness.setter
     def brightness(self, value):
-        self._brightness = value
+        if 0 <= float(value) <= 1.0:
+            self._brightness = value
+            if self._backlight_type == BACKLIGHT_IN_OUT:
+                self._backlight.value = int(round(self._brightness))
+            # PWM not currently implemented
+            # Command-based brightness not implemented
+        else:
+            raise ValueError("Brightness must be between 0.0 and 1.0")
 
     @property
     def auto_brightness(self):
