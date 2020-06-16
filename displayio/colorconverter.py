@@ -51,11 +51,12 @@ class ColorConverter:
         """
         self._dither = dither
         self._depth = 16
+        self._rgba = False
 
     # pylint: disable=no-self-use
     def _compute_rgb565(self, color):
         self._depth = 16
-        return (color >> 19) << 11 | ((color >> 10) & 0x3F) << 5 | (color >> 3) & 0x1F
+        return (color[0] & 0xF8) << 8 | (color[1] & 0xFC) << 3 | color[2] >> 3
 
     def _compute_luma(self, color):
         red = color >> 16
@@ -104,8 +105,20 @@ class ColorConverter:
 
     def convert(self, color):
         "Converts the given rgb888 color to RGB565"
+        if isinstance(color, int):
+            color = ((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, 255)
+        elif isinstance(color, tuple):
+            if len(color) == 3:
+                color = (color[0], color[1], color[2], 255)
+            elif len(color) != 4:
+                raise ValueError("Color must be a 3 or 4 value tuple")
+        else:
+            raise ValueError("Color must be an integer or 3 or 4 value tuple")
+
         if self._dither:
             return color  # To Do: return a dithered color
+        if self._rgba:
+            return color
         return self._compute_rgb565(color)
 
     # pylint: enable=no-self-use
