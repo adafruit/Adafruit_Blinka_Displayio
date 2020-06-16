@@ -88,7 +88,7 @@ class TileGrid:
             raise ValueError("Unsupported Pixel Shader type")
         self._pixel_shader = pixel_shader
         if isinstance(self._pixel_shader, ColorConverter):
-            self._pixel_shader.rgba = True
+            self._pixel_shader._rgba = True  # pylint: disable=protected-access
         self._hidden = False
         self._x = x
         self._y = y

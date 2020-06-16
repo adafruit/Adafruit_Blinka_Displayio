@@ -135,16 +135,3 @@ class ColorConverter:
         if not isinstance(value, bool):
             raise ValueError("Value should be boolean")
         self._dither = value
-
-    @property
-    def rgba(self):
-        """When true the color converter returns a 4-value
-        RGBA tuple rather than an integer
-        """
-        return self._rgba
-
-    @rgba.setter
-    def rgba(self, value):
-        if not isinstance(value, bool):
-            raise ValueError("Value should be boolean")
-        self._rgba = value
