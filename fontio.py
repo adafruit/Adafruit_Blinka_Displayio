@@ -99,7 +99,7 @@ class BuiltinFont:
         return self._bitmap
 
 
-# pylint: disable=too-few-public-methods, invalid-name
+# pylint: disable=too-few-public-methods, invalid-name, too-many-arguments
 class Glyph:
     """Storage of glyph info"""
 
@@ -114,4 +114,4 @@ class Glyph:
         self.tile_index = tile_index
 
 
-# pylint: enable=too-few-public-methods, invalid-name
+# pylint: enable=too-few-public-methods, invalid-name, too-many-arguments
