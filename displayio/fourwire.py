@@ -120,13 +120,12 @@ class FourWire:
     def begin_transaction(self):
         """Begin the SPI transaction by locking, configuring, and setting Chip Select
         """
-        if not self._spi.try_lock():
-            return False
+        while not self._spi.try_lock():
+            pass
         self._spi.configure(
             baudrate=self._frequency, polarity=self._polarity, phase=self._phase
         )
         self._chip_select.value = False
-        return True
 
     def end_transaction(self):
         """End the SPI transaction by unlocking and setting Chip Select

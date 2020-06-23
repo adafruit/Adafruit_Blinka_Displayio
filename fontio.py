@@ -103,7 +103,7 @@ class BuiltinFont:
 class Glyph:
     """Storage of glyph info"""
 
-    def __init__(self, *, bitmap, tile_index, width, height, dx, dy, shift_x, shift_y):
+    def __init__(self, bitmap, tile_index, width, height, dx, dy, shift_x, shift_y):
         self.bitmap = bitmap
         self.width = width
         self.height = height
