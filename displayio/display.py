@@ -353,7 +353,7 @@ class Display:
         if 0 <= float(value) <= 1.0:
             self._brightness = value
             if self._backlight_type == BACKLIGHT_IN_OUT:
-                self._backlight.value = int(round(self._brightness))
+                self._backlight.value = round(self._brightness)
             # PWM not currently implemented
             # Command-based brightness not implemented
         else:
