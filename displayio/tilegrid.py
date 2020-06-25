@@ -198,23 +198,18 @@ class TileGrid:
         return pixel_value
 
     def _apply_palette(self, image):
-        if isinstance(self._pixel_shader, Palette):
-            image.putpalette(
-                self._pixel_shader._get_palette()  # pylint: disable=protected-access
-            )
-        if isinstance(self._pixel_shader, ColorConverter):
-            # This will be needed for eInks, grayscale, and monochrome displays
-            pass
+        image.putpalette(
+            self._pixel_shader._get_palette()  # pylint: disable=protected-access
+        )
 
     def _add_alpha(self, image):
-        if isinstance(self._pixel_shader, Palette):
-            alpha = self._bitmap._image.copy().convert(  # pylint: disable=protected-access
-                "P"
-            )
-            alpha.putpalette(
-                self._pixel_shader._get_alpha_palette()  # pylint: disable=protected-access
-            )
-            image.putalpha(alpha.convert("L"))
+        alpha = self._bitmap._image.copy().convert(  # pylint: disable=protected-access
+            "P"
+        )
+        alpha.putpalette(
+            self._pixel_shader._get_alpha_palette()  # pylint: disable=protected-access
+        )
+        image.putalpha(alpha.convert("L"))
 
     # pylint: disable=too-many-locals
     def _fill_area(self, buffer):
@@ -237,12 +232,15 @@ class TileGrid:
                 tile_index = self._tiles[tile_y * self._width + tile_x]
                 tile_index_x = tile_index % tile_count_x
                 tile_index_y = tile_index // tile_count_x
-                tile_image = self._bitmap._image.copy().convert(  # pylint: disable=protected-access
-                    "P"
-                )
-                self._apply_palette(tile_image)
-                tile_image = tile_image.convert("RGBA")
-                self._add_alpha(tile_image)
+                tile_image = self._bitmap._image  # pylint: disable=protected-access
+                if isinstance(self._pixel_shader, Palette):
+                    tile_image = tile_image.copy().convert("P")
+                    self._apply_palette(tile_image)
+                    tile_image = tile_image.convert("RGBA")
+                    self._add_alpha(tile_image)
+                elif isinstance(self._pixel_shader, ColorConverter):
+                    # This will be needed for eInks, grayscale, and monochrome displays
+                    pass
                 image.alpha_composite(
                     tile_image,
                     dest=(tile_x * self._tile_width, tile_y * self._tile_height),
