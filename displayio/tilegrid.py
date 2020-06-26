@@ -197,6 +197,20 @@ class TileGrid:
             return self._pixel_shader.convert(pixel_value)
         return pixel_value
 
+    def _apply_palette(self, image):
+        image.putpalette(
+            self._pixel_shader._get_palette()  # pylint: disable=protected-access
+        )
+
+    def _add_alpha(self, image):
+        alpha = self._bitmap._image.copy().convert(  # pylint: disable=protected-access
+            "P"
+        )
+        alpha.putpalette(
+            self._pixel_shader._get_alpha_palette()  # pylint: disable=protected-access
+        )
+        image.putalpha(alpha.convert("L"))
+
     # pylint: disable=too-many-locals
     def _fill_area(self, buffer):
         """Draw onto the image"""
@@ -218,14 +232,23 @@ class TileGrid:
                 tile_index = self._tiles[tile_y * self._width + tile_x]
                 tile_index_x = tile_index % tile_count_x
                 tile_index_y = tile_index // tile_count_x
-                for pixel_x in range(self._tile_width):
-                    for pixel_y in range(self._tile_height):
-                        image_x = (tile_x * self._tile_width) + pixel_x
-                        image_y = (tile_y * self._tile_height) + pixel_y
-                        bitmap_x = (tile_index_x * self._tile_width) + pixel_x
-                        bitmap_y = (tile_index_y * self._tile_height) + pixel_y
-                        pixel_color = self._shade(self._bitmap[bitmap_x, bitmap_y])
-                        image.putpixel((image_x, image_y), pixel_color)
+                tile_image = self._bitmap._image  # pylint: disable=protected-access
+                if isinstance(self._pixel_shader, Palette):
+                    tile_image = tile_image.copy().convert("P")
+                    self._apply_palette(tile_image)
+                    tile_image = tile_image.convert("RGBA")
+                    self._add_alpha(tile_image)
+                elif isinstance(self._pixel_shader, ColorConverter):
+                    # This will be needed for eInks, grayscale, and monochrome displays
+                    pass
+                image.alpha_composite(
+                    tile_image,
+                    dest=(tile_x * self._tile_width, tile_y * self._tile_height),
+                    source=(
+                        tile_index_x * self._tile_width,
+                        tile_index_y * self._tile_height,
+                    ),
+                )
 
         if self._absolute_transform is not None:
             if self._absolute_transform.scale > 1:

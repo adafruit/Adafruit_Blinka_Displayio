@@ -36,6 +36,7 @@ displayio for Blinka
 """
 
 from recordclass import recordclass
+from PIL import Image
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -75,7 +76,7 @@ class Bitmap:
         ):
             raise NotImplementedError("Invalid bits per value")
 
-        self._data = (width * height) * [0]
+        self._image = Image.new("P", (width, height), 0)
         self._dirty_area = Rectangle(0, 0, width, height)
 
     def __getitem__(self, index):
@@ -84,10 +85,16 @@ class Bitmap:
         an x,y tuple or an int equal to `y * width + x`.
         """
         if isinstance(index, (tuple, list)):
-            index = (index[1] * self._width) + index[0]
-        if index >= len(self._data):
+            x, y = index
+        elif isinstance(index, int):
+            x = index % self._width
+            y = index // self._width
+        else:
+            raise TypeError("Index is not an int, list, or tuple")
+
+        if x > self._image.width or y > self._image.height:
             raise ValueError("Index {} is out of range".format(index))
-        return self._data[index]
+        return self._image.getpixel((x, y))
 
     def __setitem__(self, index, value):
         """
@@ -103,7 +110,7 @@ class Bitmap:
         elif isinstance(index, int):
             x = index % self._width
             y = index // self._width
-        self._data[index] = value
+        self._image.putpixel((x, y), value)
         if self._dirty_area.x1 == self._dirty_area.x2:
             self._dirty_area.x1 = x
             self._dirty_area.x2 = x + 1
@@ -125,7 +132,7 @@ class Bitmap:
 
     def fill(self, value):
         """Fills the bitmap with the supplied palette index value."""
-        self._data = (self._width * self._height) * [value]
+        self._image = Image.new("P", (self._width, self._height), value)
         self._dirty_area = Rectangle(0, 0, self._width, self._height)
 
     @property

@@ -111,3 +111,19 @@ class Palette:
         """Set the palette index to be an opaque color"""
         self._colors[palette_index]["transparent"] = False
         self._update_rgba(palette_index)
+
+    def _get_palette(self):
+        """Generate a palette for use with PIL"""
+        palette = []
+        for color in self._colors:
+            palette += color["rgba"][0:3]
+        return palette
+
+    def _get_alpha_palette(self):
+        """Generate an alpha channel palette with white being
+        opaque and black being transparent"""
+        palette = []
+        for color in self._colors:
+            for _ in range(3):
+                palette += [0 if color["transparent"] else 255]
+        return palette
