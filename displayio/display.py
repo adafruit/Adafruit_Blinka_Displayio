@@ -213,6 +213,8 @@ class Display:
         When auto refresh is on, updates the display immediately. (The display will also
         update without calls to this.)
         """
+        self._subrectangles = []
+
         # Go through groups and and add each to buffer
         if self._current_group is not None:
             buffer = Image.new("RGBA", (self._width, self._height))
@@ -221,8 +223,9 @@ class Display:
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
 
-        # Eventually calculate dirty rectangles here
-        self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
+        if self._current_group is not None:
+            # Eventually calculate dirty rectangles here
+            self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
 
         for area in self._subrectangles:
             self._refresh_display_area(area)

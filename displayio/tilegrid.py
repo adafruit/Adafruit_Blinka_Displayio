@@ -103,10 +103,10 @@ class TileGrid:
             tile_width = bitmap_width
         if tile_height is None:
             tile_height = bitmap_height
-        if bitmap_width % tile_width != 0:
+        if tile_width > 0 and bitmap_width % tile_width != 0:
             raise ValueError("Tile width must exactly divide bitmap width")
         self._tile_width = tile_width
-        if bitmap_height % tile_height != 0:
+        if tile_height > 0 and bitmap_height % tile_height != 0:
             raise ValueError("Tile height must exactly divide bitmap height")
         self._tile_height = tile_height
         if not 0 <= default_tile <= 255:
