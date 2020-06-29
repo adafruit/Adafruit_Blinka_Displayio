@@ -37,6 +37,7 @@ terminalio for Blinka
 
 import sys  # pylint: disable=unused-import
 import fontio
+from displayio.tilegrid import TileGrid
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -46,3 +47,28 @@ FONT = fontio.BuiltinFont()
 # TODO: Tap into stdout to get the REPL
 # sys.stdout = open('out.dat', 'w')
 # sys.stdout.close()
+
+
+class Terminal:
+    """Displays text in a TileGrid
+
+    The terminalio module contains classes to display a character stream on a display. The built in font is available as terminalio.FONT.
+    """
+
+    def __init__(self, tilegrid, font):
+        if not isinstance(tilefrid, TileGrid):
+            raise TypeError("Expected a TileGrid")
+        self._tilegrid = tilegrid
+        if not isinstance(font, fontio.BuiltinFont):
+            raise TypeError("Expected a BuiltinFont")
+        self._font = font
+        self._cursor_x = 0
+        self._curcor_y = 0
+        self._first_row = 0
+        for x in range(self._tilegrid.width):
+            for y in range(self._tilegrid.height):
+                self._tilegrid[x, y] = 0
+
+    def write(self, buf):
+        """Write the buffer of bytes to the bus."""
+        pass
