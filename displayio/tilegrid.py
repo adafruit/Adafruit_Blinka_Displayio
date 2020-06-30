@@ -99,14 +99,18 @@ class TileGrid:
         self._flip_y = False
         self._top_left_x = 0
         self._top_left_y = 0
-        if tile_width is None:
+        if tile_width is None or tile_width == 0:
             tile_width = bitmap_width
-        if tile_height is None:
+        if tile_height is None or tile_width == 0:
             tile_height = bitmap_height
-        if tile_width > 0 and bitmap_width % tile_width != 0:
+        if tile_width < 1:
+            tile_width = 1
+        if tile_height < 1:
+            tile_height = 1
+        if bitmap_width % tile_width != 0:
             raise ValueError("Tile width must exactly divide bitmap width")
         self._tile_width = tile_width
-        if tile_height > 0 and bitmap_height % tile_height != 0:
+        if bitmap_height % tile_height != 0:
             raise ValueError("Tile height must exactly divide bitmap height")
         self._tile_height = tile_height
         if not 0 <= default_tile <= 255:
@@ -217,6 +221,9 @@ class TileGrid:
         if self._hidden:
             return
 
+        if self._bitmap.width <= 0 or self._bitmap.height <= 0:
+            return
+
         image = Image.new(
             "RGBA",
             (self._width * self._tile_width, self._height * self._tile_height),
@@ -269,7 +276,7 @@ class TileGrid:
             y *= self._absolute_transform.dy
             x += self._absolute_transform.x
             y += self._absolute_transform.y
-        buffer.alpha_composite(image, (x, y))
+        buffer.alpha_composite(image, (int(x), int(y)))
 
     # pylint: enable=too-many-locals
 
