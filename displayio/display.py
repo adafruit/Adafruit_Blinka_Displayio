@@ -192,7 +192,7 @@ class Display:
         self._bus.end_transaction()
 
     def _release(self):
-        self._bus.release()
+        self._bus._release()  # pylint: disable=protected-access
         self._bus = None
 
     def show(self, group):

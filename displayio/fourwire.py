@@ -99,8 +99,6 @@ class FourWire:
             time.sleep(0.001)
             self._reset.value = True
             time.sleep(0.001)
-        else:
-            raise RuntimeError("No reset pin defined")
 
     def send(self, is_command, data, *, toggle_every_byte=False):
         """Sends the given command value followed by the full set of data. Display state,
