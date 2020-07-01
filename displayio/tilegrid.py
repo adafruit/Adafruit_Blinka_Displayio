@@ -215,7 +215,7 @@ class TileGrid:
         )
         image.putalpha(alpha.convert("L"))
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches
     def _fill_area(self, buffer):
         """Draw onto the image"""
         if self._hidden:
@@ -276,9 +276,20 @@ class TileGrid:
             y *= self._absolute_transform.dy
             x += self._absolute_transform.x
             y += self._absolute_transform.y
-        buffer.alpha_composite(image, (int(x), int(y)))
 
-    # pylint: enable=too-many-locals
+        source_x = source_y = 0
+        if x < 0:
+            source_x = 0 - x
+            x = 0
+        if y < 0:
+            source_y = 0 - y
+            y = 0
+
+        buffer.alpha_composite(
+            image, (round(x), round(y)), source=(round(source_x), round(source_y))
+        )
+
+    # pylint: enable=too-many-locals,too-many-branches
 
     @property
     def hidden(self):
