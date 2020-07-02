@@ -155,9 +155,19 @@ class Display:
 
         self._backlight_type = None
         if backlight_pin is not None:
-            self._backlight_type = BACKLIGHT_IN_OUT
-            self._backlight = digitalio.DigitalInOut(backlight_pin)
-            self._backlight.switch_to_output()
+            try:
+                from pulseio import PWMOut  # pylint: disable=import-outside-toplevel
+
+                # 100Hz looks decent and doesn't keep the CPU too busy
+                self._backlight = PWMOut(backlight_pin, frequency=100, duty_cycle=0)
+                self._backlight_type = BACKLIGHT_PWM
+            except ImportError:
+                # PWMOut not implemented on this platform
+                pass
+            if self._backlight_type is None:
+                self._backlight_type = BACKLIGHT_IN_OUT
+                self._backlight = digitalio.DigitalInOut(backlight_pin)
+                self._backlight.switch_to_output()
             self.brightness = brightness
 
     # pylint: enable=too-many-locals
@@ -357,8 +367,10 @@ class Display:
             self._brightness = value
             if self._backlight_type == BACKLIGHT_IN_OUT:
                 self._backlight.value = round(self._brightness)
-            # PWM not currently implemented
-            # Command-based brightness not implemented
+            elif self._backlight_type == BACKLIGHT_PWM:
+                self._backlight.duty_cycle = self._brightness * 65535
+            elif self._brightness_command is not None:
+                self._write(self._brightness_command, round(value * 255))
         else:
             raise ValueError("Brightness must be between 0.0 and 1.0")
 
