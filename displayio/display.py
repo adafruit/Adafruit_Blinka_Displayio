@@ -42,6 +42,7 @@ import digitalio
 from PIL import Image
 import numpy
 from recordclass import recordclass
+from displayio.colorconverter import ColorConverter
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -54,14 +55,6 @@ BACKLIGHT_PWM = 2
 
 # pylint: disable=unnecessary-pass, unused-argument
 # pylint: disable=too-many-instance-attributes
-
-
-def _rgb_tuple_to_rgb565(color_tuple):
-    return (
-        ((color_tuple[0] & 0x00F8) << 8)
-        | ((color_tuple[1] & 0x00FC) << 3)
-        | (color_tuple[2] & 0x00F8) >> 3
-    )
 
 
 class Display:
@@ -161,6 +154,7 @@ class Display:
         self._refresh_thread = None
         if self._auto_refresh:
             self.auto_refresh = True
+        self._colorconverter = ColorConverter()
 
         self._backlight_type = None
         if backlight_pin is not None:
@@ -342,7 +336,7 @@ class Display:
     def fill_row(self, y, buffer):
         """Extract the pixels from a single row"""
         for x in range(0, self._width):
-            _rgb_565 = _rgb_tuple_to_rgb565(self._buffer.getpixel((x, y)))
+            _rgb_565 = self._colorconverter.convert(self._buffer.getpixel((x, y)))
             buffer[x * 2] = (_rgb_565 >> 8) & 0xFF
             buffer[x * 2 + 1] = _rgb_565 & 0xFF
         return buffer
