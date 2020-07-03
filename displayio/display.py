@@ -330,9 +330,21 @@ class Display:
         """Encode a postion into bytes."""
         return struct.pack(self._bounds_encoding, x, y)
 
+    def _rgb_tuple_to_rgb565(self, color_tuple):
+        return (
+            ((color_tuple[0] & 0x00F8) << 8)
+            | ((color_tuple[1] & 0x00FC) << 3)
+            | (color_tuple[2] & 0x00F8) >> 3
+        )
+
     def fill_row(self, y, buffer):
         """Extract the pixels from a single row"""
-        pass
+        for x in range(0, self._width):
+            _rgb_565 = self._rgb_tuple_to_rgb565(self._buffer.getpixel((x, y)))
+            buffer[x * 2] = _rgb_565 >> 8
+            buffer[x * 2 + 1] = _rgb_565
+            #(data[i * 2] << 8) + data[i * 2 + 1]
+        return buffer
 
     @property
     def auto_refresh(self):
