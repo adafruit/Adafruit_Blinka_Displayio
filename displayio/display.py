@@ -343,7 +343,6 @@ class Display:
             _rgb_565 = self._rgb_tuple_to_rgb565(self._buffer.getpixel((x, y)))
             buffer[x * 2] = (_rgb_565 >> 8) & 0xff
             buffer[x * 2 + 1] = _rgb_565 & 0xff
-            #(data[i * 2] << 8) + data[i * 2 + 1]
         return buffer
 
     @property
