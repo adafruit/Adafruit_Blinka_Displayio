@@ -53,8 +53,17 @@ BACKLIGHT_IN_OUT = 1
 BACKLIGHT_PWM = 2
 
 # pylint: disable=unnecessary-pass, unused-argument
-
 # pylint: disable=too-many-instance-attributes
+
+
+def _rgb_tuple_to_rgb565(color_tuple):
+    return (
+        ((color_tuple[0] & 0x00F8) << 8)
+        | ((color_tuple[1] & 0x00FC) << 3)
+        | (color_tuple[2] & 0x00F8) >> 3
+    )
+
+
 class Display:
     """This initializes a display and connects it into CircuitPython. Unlike other objects
     in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
@@ -330,19 +339,12 @@ class Display:
         """Encode a postion into bytes."""
         return struct.pack(self._bounds_encoding, x, y)
 
-    def _rgb_tuple_to_rgb565(self, color_tuple):
-        return (
-            ((color_tuple[0] & 0x00F8) << 8)
-            | ((color_tuple[1] & 0x00FC) << 3)
-            | (color_tuple[2] & 0x00F8) >> 3
-        )
-
     def fill_row(self, y, buffer):
         """Extract the pixels from a single row"""
         for x in range(0, self._width):
-            _rgb_565 = self._rgb_tuple_to_rgb565(self._buffer.getpixel((x, y)))
-            buffer[x * 2] = (_rgb_565 >> 8) & 0xff
-            buffer[x * 2 + 1] = _rgb_565 & 0xff
+            _rgb_565 = _rgb_tuple_to_rgb565(self._buffer.getpixel((x, y)))
+            buffer[x * 2] = (_rgb_565 >> 8) & 0xFF
+            buffer[x * 2 + 1] = _rgb_565 & 0xFF
         return buffer
 
     @property
