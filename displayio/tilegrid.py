@@ -279,15 +279,22 @@ class TileGrid:
 
         source_x = source_y = 0
         if x < 0:
-            source_x = 0 - x
+            source_x = round(0 - x)
             x = 0
         if y < 0:
-            source_y = 0 - y
+            source_y = round(0 - y)
             y = 0
 
-        buffer.alpha_composite(
-            image, (round(x), round(y)), source=(round(source_x), round(source_y))
-        )
+        x = round(x)
+        y = round(y)
+
+        if (
+            x <= buffer.width
+            and y <= buffer.height
+            and source_x <= image.width
+            and source_y <= image.height
+        ):
+            buffer.alpha_composite(image, (x, y), source=(source_x, source_y))
 
     # pylint: enable=too-many-locals,too-many-branches
 
