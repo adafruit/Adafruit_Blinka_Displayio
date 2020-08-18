@@ -215,7 +215,7 @@ class TileGrid:
         )
         image.putalpha(alpha.convert("L"))
 
-    # pylint: disable=too-many-locals,too-many-branches
+    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def _fill_area(self, buffer):
         """Draw onto the image"""
         if self._hidden:
@@ -224,58 +224,67 @@ class TileGrid:
         if self._bitmap.width <= 0 or self._bitmap.height <= 0:
             return
 
-        image = Image.new(
-            "RGBA",
-            (self._width * self._tile_width, self._height * self._tile_height),
-            (0, 0, 0, 0),
-        )
-
-        tile_count_x = self._bitmap.width // self._tile_width
+        # Copy class variables to local variables in case something changes
         x = self._x
         y = self._y
+        width = self._width
+        height = self._height
+        tile_width = self._tile_width
+        tile_height = self._tile_height
+        bitmap_width = self._bitmap.width
+        pixel_width = self._pixel_width
+        pixel_height = self._pixel_height
+        tiles = self._tiles
+        absolute_transform = self._absolute_transform
+        pixel_shader = self._pixel_shader
+        bitmap = self._bitmap
+        tiles = self._tiles
 
-        for tile_x in range(self._width):
-            for tile_y in range(self._height):
-                tile_index = self._tiles[tile_y * self._width + tile_x]
+        tile_count_x = bitmap_width // tile_width
+
+        image = Image.new(
+            "RGBA", (width * tile_width, height * tile_height), (0, 0, 0, 0),
+        )
+
+        for tile_x in range(width):
+            for tile_y in range(height):
+                tile_index = tiles[tile_y * width + tile_x]
                 tile_index_x = tile_index % tile_count_x
                 tile_index_y = tile_index // tile_count_x
-                tile_image = self._bitmap._image  # pylint: disable=protected-access
-                if isinstance(self._pixel_shader, Palette):
+                tile_image = bitmap._image  # pylint: disable=protected-access
+                if isinstance(pixel_shader, Palette):
                     tile_image = tile_image.copy().convert("P")
                     self._apply_palette(tile_image)
                     tile_image = tile_image.convert("RGBA")
                     self._add_alpha(tile_image)
-                elif isinstance(self._pixel_shader, ColorConverter):
+                elif isinstance(pixel_shader, ColorConverter):
                     # This will be needed for eInks, grayscale, and monochrome displays
                     pass
                 image.alpha_composite(
                     tile_image,
-                    dest=(tile_x * self._tile_width, tile_y * self._tile_height),
-                    source=(
-                        tile_index_x * self._tile_width,
-                        tile_index_y * self._tile_height,
-                    ),
+                    dest=(tile_x * tile_width, tile_y * tile_height),
+                    source=(tile_index_x * tile_width, tile_index_y * tile_height,),
                 )
 
-        if self._absolute_transform is not None:
-            if self._absolute_transform.scale > 1:
+        if absolute_transform is not None:
+            if absolute_transform.scale > 1:
                 image = image.resize(
                     (
-                        self._pixel_width * self._absolute_transform.scale,
-                        self._pixel_height * self._absolute_transform.scale,
+                        pixel_width * absolute_transform.scale,
+                        pixel_height * absolute_transform.scale,
                     ),
                     resample=Image.NEAREST,
                 )
-            if self._absolute_transform.mirror_x:
+            if absolute_transform.mirror_x:
                 image = image.transpose(Image.FLIP_LEFT_RIGHT)
-            if self._absolute_transform.mirror_y:
+            if absolute_transform.mirror_y:
                 image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            if self._absolute_transform.transpose_xy:
+            if absolute_transform.transpose_xy:
                 image = image.transpose(Image.TRANSPOSE)
-            x *= self._absolute_transform.dx
-            y *= self._absolute_transform.dy
-            x += self._absolute_transform.x
-            y += self._absolute_transform.y
+            x *= absolute_transform.dx
+            y *= absolute_transform.dy
+            x += absolute_transform.x
+            y += absolute_transform.y
 
         source_x = source_y = 0
         if x < 0:
