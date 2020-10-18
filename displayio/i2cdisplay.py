@@ -31,7 +31,7 @@ displayio for Blinka
 * Adafruit Blinka:
   https://github.com/adafruit/Adafruit_Blinka/releases
 
-* Author(s): Melissa LeBlanc-Williams
+* Author(s): Melissa LeBlanc-Williams, Erik Tollerud
 
 """
 
@@ -55,17 +55,46 @@ class I2CDisplay:
         :py:func`displayio.release_displays` first, otherwise it will error after the first
         code.py run.
         """
-        pass
+        if reset is not None:
+            self._reset = digitalio.DigitalInOut(reset)
+            self._reset.switch_to_output(value=True)
+        else:
+            self._reset = None
+        self._i2c = i2c_bus
+        self._dev_addr = device_address
+
+    def _release(self):
+        self.reset()
+        self._i2c.deinit()
+        if self._reset is not None:
+            self._reset.deinit()
 
     def reset(self):
-        """Performs a hardware reset via the reset pin. Raises an exception if called
-        when no reset pin is available.
+        """Performs a hardware reset via the reset pin if one is present.
         """
-        pass
+        if self._reset is not None:
+            self._reset.value = False
+            time.sleep(0.001)
+            self._reset.value = True
+            time.sleep(0.001)
 
-    def send(self, command, data):
+    def send(self, is_command, data, *, toggle_every_byte=False):
         """Sends the given command value followed by the full set of data. Display state,
-        such as vertical scroll, set via send may or may not be reset once the code is
+        such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
-        pass
+        control_byte = 0b10000000 if is_command else 0b11000000
+
+        buffer = []
+        for d in data:
+            buffer.append(control_byte)
+            buffer.append(d)
+
+        self._i2c.writeto(self._dev_addr, bytes(buffer))
+
+    def begin_transaction(self):
+        while not self._i2c.try_lock():
+            pass
+
+    def end_transaction(self):
+        self._i2c.unlock()
