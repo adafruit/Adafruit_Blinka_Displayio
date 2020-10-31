@@ -66,7 +66,9 @@ class Group:
         self._supported_types = (TileGrid, Group)
         self._absolute_transform = None
         self.in_group = False
-        self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
+        self._absolute_transform = Transform(
+            0, 0, 1, 1, self._scale, False, False, False
+        )
 
     def update_transform(self, parent_transform):
         """Update the parent transform and child transforms"""
