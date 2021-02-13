@@ -270,8 +270,8 @@ class TileGrid:
             if absolute_transform.scale > 1:
                 image = image.resize(
                     (
-                        pixel_width * absolute_transform.scale,
-                        pixel_height * absolute_transform.scale,
+                        int(pixel_width * absolute_transform.scale),
+                        int(pixel_height * absolute_transform.scale,)
                     ),
                     resample=Image.NEAREST,
                 )
