@@ -243,7 +243,9 @@ class TileGrid:
         tile_count_x = bitmap_width // tile_width
 
         image = Image.new(
-            "RGBA", (width * tile_width, height * tile_height), (0, 0, 0, 0),
+            "RGBA",
+            (width * tile_width, height * tile_height),
+            (0, 0, 0, 0),
         )
 
         for tile_x in range(width):
@@ -263,7 +265,10 @@ class TileGrid:
                 image.alpha_composite(
                     tile_image,
                     dest=(tile_x * tile_width, tile_y * tile_height),
-                    source=(tile_index_x * tile_width, tile_index_y * tile_height,),
+                    source=(
+                        tile_index_x * tile_width,
+                        tile_index_y * tile_height,
+                    ),
                 )
 
         if absolute_transform is not None:
