@@ -116,8 +116,7 @@ class FourWire:
             self._spi.write(data)
 
     def begin_transaction(self):
-        """Begin the SPI transaction by locking, configuring, and setting Chip Select
-        """
+        """Begin the SPI transaction by locking, configuring, and setting Chip Select"""
         while not self._spi.try_lock():
             pass
         self._spi.configure(
@@ -126,7 +125,6 @@ class FourWire:
         self._chip_select.value = False
 
     def end_transaction(self):
-        """End the SPI transaction by unlocking and setting Chip Select
-        """
+        """End the SPI transaction by unlocking and setting Chip Select"""
         self._chip_select.value = True
         self._spi.unlock()
