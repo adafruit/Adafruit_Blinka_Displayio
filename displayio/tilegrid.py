@@ -268,6 +268,8 @@ class TileGrid:
                     source=(
                         tile_index_x * tile_width,
                         tile_index_y * tile_height,
+                        tile_index_x * tile_width + tile_width,
+                        tile_index_y * tile_height + tile_height,
                     ),
                 )
 
