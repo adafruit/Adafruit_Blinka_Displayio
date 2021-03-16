@@ -53,8 +53,8 @@ class Bitmap:
         share the underlying Bitmap. value_count is used to minimize the memory used to store
         the Bitmap.
         """
-        self._width = width
-        self._height = height
+        self._bmp_width = width
+        self._bmp_height = height
         self._read_only = False
 
         if value_count < 0:
@@ -87,8 +87,8 @@ class Bitmap:
         if isinstance(index, (tuple, list)):
             x, y = index
         elif isinstance(index, int):
-            x = index % self._width
-            y = index // self._width
+            x = index % self._bmp_width
+            y = index // self._bmp_width
         else:
             raise TypeError("Index is not an int, list, or tuple")
 
@@ -106,10 +106,10 @@ class Bitmap:
         if isinstance(index, (tuple, list)):
             x = index[0]
             y = index[1]
-            index = y * self._width + x
+            index = y * self._bmp_width + x
         elif isinstance(index, int):
-            x = index % self._width
-            y = index // self._width
+            x = index % self._bmp_width
+            y = index // self._bmp_width
         self._image.putpixel((x, y), value)
         if self._dirty_area.x1 == self._dirty_area.x2:
             self._dirty_area.x1 = x
@@ -132,15 +132,15 @@ class Bitmap:
 
     def fill(self, value):
         """Fills the bitmap with the supplied palette index value."""
-        self._image = Image.new("P", (self._width, self._height), value)
-        self._dirty_area = Rectangle(0, 0, self._width, self._height)
+        self._image = Image.new("P", (self._bmp_width, self._bmp_height), value)
+        self._dirty_area = Rectangle(0, 0, self._bmp_width, self._bmp_height)
 
     @property
     def width(self):
         """Width of the bitmap. (read only)"""
-        return self._width
+        return self._bmp_width
 
     @property
     def height(self):
         """Height of the bitmap. (read only)"""
-        return self._height
+        return self._bmp_height
