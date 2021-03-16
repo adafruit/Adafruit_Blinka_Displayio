@@ -59,9 +59,9 @@ class Group:
         if not isinstance(scale, int) or scale < 1:
             raise ValueError("Scale must be >= 1")
         self._scale = scale
-        self._x = x
-        self._y = y
-        self._hidden = False
+        self._group_x = x
+        self._group_y = y
+        self._hidden_group = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
         self._absolute_transform = None
@@ -74,8 +74,8 @@ class Group:
         """Update the parent transform and child transforms"""
         self.in_group = parent_transform is not None
         if self.in_group:
-            x = self._x
-            y = self._y
+            x = self._group_x
+            y = self._group_y
             if parent_transform.transpose_xy:
                 x, y = y, x
             self._absolute_transform.x = parent_transform.x + parent_transform.dx * x
@@ -154,7 +154,7 @@ class Group:
         del self._layers[index]
 
     def _fill_area(self, buffer):
-        if self._hidden:
+        if self._hidden_group:
             return
 
         for layer in self._layers:
@@ -166,13 +166,13 @@ class Group:
         """True when the Group and all of it’s layers are not visible. When False, the
         Group’s layers are visible if they haven’t been hidden.
         """
-        return self._hidden
+        return self._hidden_group
 
     @hidden.setter
     def hidden(self, value):
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
-        self._hidden = bool(value)
+        self._hidden_group = bool(value)
 
     @property
     def scale(self):
@@ -201,37 +201,37 @@ class Group:
     @property
     def x(self):
         """X position of the Group in the parent."""
-        return self._x
+        return self._group_x
 
     @x.setter
     def x(self, value):
         if not isinstance(value, int):
             raise ValueError("x must be an integer")
-        if self._x != value:
+        if self._group_x != value:
             if self._absolute_transform.transpose_xy:
                 dy_value = self._absolute_transform.dy / self._scale
-                self._absolute_transform.y += dy_value * (value - self._x)
+                self._absolute_transform.y += dy_value * (value - self._group_x)
             else:
                 dx_value = self._absolute_transform.dx / self._scale
-                self._absolute_transform.x += dx_value * (value - self._x)
-            self._x = value
+                self._absolute_transform.x += dx_value * (value - self._group_x)
+            self._group_x = value
             self._update_child_transforms()
 
     @property
     def y(self):
         """Y position of the Group in the parent."""
-        return self._y
+        return self._group_y
 
     @y.setter
     def y(self, value):
         if not isinstance(value, int):
             raise ValueError("y must be an integer")
-        if self._y != value:
+        if self._group_y != value:
             if self._absolute_transform.transpose_xy:
                 dx_value = self._absolute_transform.dx / self._scale
-                self._absolute_transform.x += dx_value * (value - self._y)
+                self._absolute_transform.x += dx_value * (value - self._group_y)
             else:
                 dy_value = self._absolute_transform.dy / self._scale
-                self._absolute_transform.y += dy_value * (value - self._y)
-            self._y = value
+                self._absolute_transform.y += dy_value * (value - self._group_y)
+            self._group_y = value
             self._update_child_transforms()

@@ -89,7 +89,7 @@ class TileGrid:
         self._pixel_shader = pixel_shader
         if isinstance(self._pixel_shader, ColorConverter):
             self._pixel_shader._rgba = True  # pylint: disable=protected-access
-        self._hidden = False
+        self._hidden_tilegrid = False
         self._x = x
         self._y = y
         self._width = width  # Number of Tiles Wide
@@ -218,7 +218,7 @@ class TileGrid:
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def _fill_area(self, buffer):
         """Draw onto the image"""
-        if self._hidden:
+        if self._hidden_tilegrid:
             return
 
         if self._bitmap.width <= 0 or self._bitmap.height <= 0:
@@ -318,13 +318,13 @@ class TileGrid:
     def hidden(self):
         """True when the TileGrid is hidden. This may be False even
         when a part of a hidden Group."""
-        return self._hidden
+        return self._hidden_tilegrid
 
     @hidden.setter
     def hidden(self, value):
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
-        self._hidden = bool(value)
+        self._hidden_tilegrid = bool(value)
 
     @property
     def x(self):
@@ -397,10 +397,7 @@ class TileGrid:
         """The pixel shader of the tilegrid."""
         return self._pixel_shader
 
-    def __getitem__(self, index):
-        """Returns the tile index at the given index. The index can either be
-        an x,y tuple or an int equal to ``y * width + x``'.
-        """
+    def _extract_and_check_index(self, index):
         if isinstance(index, (tuple, list)):
             x = index[0]
             y = index[1]
@@ -410,21 +407,20 @@ class TileGrid:
             y = index // self._width
         if x > self._width or y > self._height or index >= len(self._tiles):
             raise ValueError("Tile index out of bounds")
+        return index
+
+    def __getitem__(self, index):
+        """Returns the tile index at the given index. The index can either be
+        an x,y tuple or an int equal to ``y * width + x``'.
+        """
+        index = self._extract_and_check_index(index)
         return self._tiles[index]
 
     def __setitem__(self, index, value):
         """Sets the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``.
         """
-        if isinstance(index, (tuple, list)):
-            x = index[0]
-            y = index[1]
-            index = y * self._width + x
-        elif isinstance(index, int):
-            x = index % self._width
-            y = index // self._width
-        if x > self._width or y > self._height or index >= len(self._tiles):
-            raise ValueError("Tile index out of bounds")
+        index = self._extract_and_check_index(index)
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
         self._tiles[index] = value

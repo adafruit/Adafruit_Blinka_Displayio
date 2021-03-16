@@ -61,11 +61,11 @@ class I2CDisplay:
         """Performs a hardware reset via the reset pin. Raises an exception if called
         when no reset pin is available.
         """
-        pass
+        raise NotImplementedError("I2CDisplay reset has not been implemented yet")
 
     def send(self, command, data):
         """Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via send may or may not be reset once the code is
         done.
         """
-        pass
+        raise NotImplementedError("I2CDisplay send has not been implemented yet")
