@@ -67,7 +67,6 @@ class ParallelBus:
         """
         raise NotImplementedError("ParallelBus reset has not been implemented yet")
 
-
     def send(self, command, data):
         """Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
