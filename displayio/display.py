@@ -1,24 +1,6 @@
-# The MIT License (MIT)
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams for Adafruit Industries
 #
-# Copyright (c) 2020 Melissa LeBlanc-Williams for Adafruit Industries
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 """
 `displayio.display`
@@ -53,11 +35,9 @@ displays = []
 BACKLIGHT_IN_OUT = 1
 BACKLIGHT_PWM = 2
 
-# pylint: disable=unnecessary-pass, unused-argument
-# pylint: disable=too-many-instance-attributes
-
 
 class Display:
+    # pylint: disable=too-many-instance-attributes
     """This initializes a display and connects it into CircuitPython. Unlike other objects
     in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
     This is done so that CircuitPython can use the display itself.
@@ -74,7 +54,6 @@ class Display:
         auto_refresh=True, native_frames_per_second=60)
     """
 
-    # pylint: disable=too-many-locals
     def __init__(
         self,
         display_bus,
@@ -103,6 +82,7 @@ class Display:
         auto_refresh=True,
         native_frames_per_second=60
     ):
+        # pylint: disable=unused-argument,too-many-locals
         """Create a Display object on the given display bus (`displayio.FourWire` or
         `displayio.ParallelBus`).
 
@@ -173,8 +153,6 @@ class Display:
                 self._backlight.switch_to_output()
             self.brightness = brightness
 
-    # pylint: enable=too-many-locals
-
     def _initialize(self, init_sequence):
         i = 0
         while i < len(init_sequence):
@@ -215,6 +193,7 @@ class Display:
         self._current_group = group
 
     def refresh(self, *, target_frames_per_second=60, minimum_frames_per_second=1):
+        # pylint: disable=unused-argument
         """When auto refresh is off, waits for the target frame rate and then refreshes the
         display, returning True. If the call has taken too long since the last refresh call
         for the given target frame rate, then the refresh returns False immediately without
@@ -419,6 +398,3 @@ class Display:
     def bus(self):
         """Current Display Bus"""
         return self._bus
-
-
-# pylint: enable=too-many-instance-attributes
