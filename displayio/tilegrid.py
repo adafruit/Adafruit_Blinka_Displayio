@@ -1,24 +1,6 @@
-# The MIT License (MIT)
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams for Adafruit Industries
 #
-# Copyright (c) 2020 Melissa LeBlanc-Williams for Adafruit Industries
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 """
 `displayio.tilegrid`
@@ -49,8 +31,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
-# pylint: disable=too-many-instance-attributes
+
 class TileGrid:
+    # pylint: disable=too-many-instance-attributes
     """Position a grid of tiles sourced from a bitmap and pixel_shader combination. Multiple
     grids can share bitmaps and pixel shaders.
 
@@ -215,8 +198,8 @@ class TileGrid:
         )
         image.putalpha(alpha.convert("L"))
 
-    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def _fill_area(self, buffer):
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Draw onto the image"""
         if self._hidden_tilegrid:
             return
@@ -313,8 +296,6 @@ class TileGrid:
             and source_y <= image.height
         ):
             buffer.alpha_composite(image, (x, y), source=(source_x, source_y))
-
-    # pylint: enable=too-many-locals,too-many-branches
 
     @property
     def hidden(self):
@@ -426,6 +407,3 @@ class TileGrid:
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
         self._tiles[index] = value
-
-
-# pylint: enable=too-many-instance-attributes
