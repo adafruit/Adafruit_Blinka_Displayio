@@ -31,7 +31,10 @@ import microcontroller
 
 try:
     from typing import Optional
-    from typing import ReadableBuffer
+except ImportError:
+    pass
+try:
+    from _typing import ReadableBuffer
 except ImportError:
     pass
 
