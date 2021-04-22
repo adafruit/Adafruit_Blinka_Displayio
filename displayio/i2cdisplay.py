@@ -33,10 +33,6 @@ try:
     from typing import Optional
 except ImportError:
     pass
-try:
-    from _typing import ReadableBuffer
-except ImportError:
-    pass
 
 
 class I2CDisplay:
@@ -93,12 +89,15 @@ class I2CDisplay:
         while not self._i2c.try_lock():
             pass
 
-    def send(self, command: bool, data: ReadableBuffer) -> None:
+    def send(self, command: bool, data, *, toggle_every_byte=False) -> None:
+        # pylint: disable=unused-argument
         """
         Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
+        # NOTE: we have to have a toggle_every_byte parameter, which we ignore,
+        # because Display._write() sets it regardless of bus type.
 
         if command:
             n = len(data)
