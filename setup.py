@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams, written for Adafruit Industries
+#
+# SPDX-License-Identifier: MIT
+
 """A setuptools based setup module.
 
 See:

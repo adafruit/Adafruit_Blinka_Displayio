@@ -1,24 +1,6 @@
-# The MIT License (MIT)
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams for Adafruit Industries
 #
-# Copyright (c) 2020 Melissa LeBlanc-Williams for Adafruit Industries
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 """
 `displayio.epaperdisplay`
@@ -39,8 +21,6 @@ displayio for Blinka
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-# pylint: disable=unnecessary-pass, unused-argument
-
 
 class EPaperDisplay:
     """Manage updating an epaper display over a display bus
@@ -54,7 +34,6 @@ class EPaperDisplay:
     that will contain the startup and shutdown sequences at minimum.
     """
 
-    # pylint: disable=too-many-locals
     def __init__(
         self,
         display_bus,
@@ -83,6 +62,7 @@ class EPaperDisplay:
         seconds_per_frame=180,
         always_toggle_chip_select=False
     ):
+        # pylint: disable=too-many-locals,unnecessary-pass
         """
         Create a EPaperDisplay object on the given display bus (displayio.FourWire or
         displayio.ParallelBus).
@@ -96,15 +76,15 @@ class EPaperDisplay:
         """
         pass
 
-    # pylint: enable=too-many-locals
-
     def show(self, group):
+        # pylint: disable=unnecessary-pass
         """Switches to displaying the given group of layers. When group is None, the default
         CircuitPython terminal will be shown (eventually).
         """
         pass
 
     def refresh(self):
+        # pylint: disable=unnecessary-pass
         """Refreshes the display immediately or raises an exception if too soon. Use
         ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur.
         """
@@ -117,15 +97,18 @@ class EPaperDisplay:
 
     @property
     def width(self):
+        # pylint: disable=unnecessary-pass
         """Display Width"""
         pass
 
     @property
     def height(self):
+        # pylint: disable=unnecessary-pass
         """Display Height"""
         pass
 
     @property
     def bus(self):
+        # pylint: disable=unnecessary-pass
         """Current Display Bus"""
         pass
