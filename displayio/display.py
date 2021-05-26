@@ -242,7 +242,7 @@ class Display:
             | (data[:, :, 2] >> 3)
         )
 
-        pixels = list(
+        pixels = bytes(
             numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
         )
 
