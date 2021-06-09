@@ -20,6 +20,9 @@ displayio for Blinka
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
+import time
+import digitalio
+
 
 class I2CDisplay:
     """Manage updating a display over I2C in the background while Python code runs.
@@ -68,15 +71,17 @@ class I2CDisplay:
         control_byte = 0b10000000 if is_command else 0b11000000
 
         buffer = []
-        for d in data:
+        for data_byte in data:
             buffer.append(control_byte)
-            buffer.append(d)
+            buffer.append(data_byte)
 
         self._i2c.writeto(self._dev_addr, bytes(buffer))
 
     def begin_transaction(self):
+        """Begin the I2C transaction"""
         while not self._i2c.try_lock():
             pass
 
     def end_transaction(self):
+        """End the I2C transaction"""
         self._i2c.unlock()
