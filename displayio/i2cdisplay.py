@@ -54,14 +54,12 @@ class I2CDisplay:
             self._reset.deinit()
 
     def reset(self):
-        """Performs a hardware reset via the reset pin if one is present.
-        """
+        """Performs a hardware reset via the reset pin if one is present."""
         if self._reset is not None:
             self._reset.value = False
             time.sleep(0.001)
             self._reset.value = True
             time.sleep(0.001)
-
 
     def send(self, is_command, data, *, toggle_every_byte=False):
         """Sends the given command value followed by the full set of data. Display state,
