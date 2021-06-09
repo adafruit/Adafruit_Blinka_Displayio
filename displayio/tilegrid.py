@@ -1,24 +1,6 @@
-# The MIT License (MIT)
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams for Adafruit Industries
 #
-# Copyright (c) 2020 Melissa LeBlanc-Williams for Adafruit Industries
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 """
 `displayio.tilegrid`
@@ -49,8 +31,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
-# pylint: disable=too-many-instance-attributes
+
 class TileGrid:
+    # pylint: disable=too-many-instance-attributes
     """Position a grid of tiles sourced from a bitmap and pixel_shader combination. Multiple
     grids can share bitmaps and pixel shaders.
 
@@ -89,7 +72,7 @@ class TileGrid:
         self._pixel_shader = pixel_shader
         if isinstance(self._pixel_shader, ColorConverter):
             self._pixel_shader._rgba = True  # pylint: disable=protected-access
-        self._hidden = False
+        self._hidden_tilegrid = False
         self._x = x
         self._y = y
         self._width = width  # Number of Tiles Wide
@@ -215,10 +198,10 @@ class TileGrid:
         )
         image.putalpha(alpha.convert("L"))
 
-    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def _fill_area(self, buffer):
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Draw onto the image"""
-        if self._hidden:
+        if self._hidden_tilegrid:
             return
 
         if self._bitmap.width <= 0 or self._bitmap.height <= 0:
@@ -243,7 +226,9 @@ class TileGrid:
         tile_count_x = bitmap_width // tile_width
 
         image = Image.new(
-            "RGBA", (width * tile_width, height * tile_height), (0, 0, 0, 0),
+            "RGBA",
+            (width * tile_width, height * tile_height),
+            (0, 0, 0, 0),
         )
 
         for tile_x in range(width):
@@ -263,15 +248,22 @@ class TileGrid:
                 image.alpha_composite(
                     tile_image,
                     dest=(tile_x * tile_width, tile_y * tile_height),
-                    source=(tile_index_x * tile_width, tile_index_y * tile_height,),
+                    source=(
+                        tile_index_x * tile_width,
+                        tile_index_y * tile_height,
+                        tile_index_x * tile_width + tile_width,
+                        tile_index_y * tile_height + tile_height,
+                    ),
                 )
 
         if absolute_transform is not None:
             if absolute_transform.scale > 1:
                 image = image.resize(
                     (
-                        pixel_width * absolute_transform.scale,
-                        pixel_height * absolute_transform.scale,
+                        int(pixel_width * absolute_transform.scale),
+                        int(
+                            pixel_height * absolute_transform.scale,
+                        ),
                     ),
                     resample=Image.NEAREST,
                 )
@@ -305,19 +297,17 @@ class TileGrid:
         ):
             buffer.alpha_composite(image, (x, y), source=(source_x, source_y))
 
-    # pylint: enable=too-many-locals,too-many-branches
-
     @property
     def hidden(self):
         """True when the TileGrid is hidden. This may be False even
         when a part of a hidden Group."""
-        return self._hidden
+        return self._hidden_tilegrid
 
     @hidden.setter
     def hidden(self, value):
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
-        self._hidden = bool(value)
+        self._hidden_tilegrid = bool(value)
 
     @property
     def x(self):
@@ -390,10 +380,7 @@ class TileGrid:
         """The pixel shader of the tilegrid."""
         return self._pixel_shader
 
-    def __getitem__(self, index):
-        """Returns the tile index at the given index. The index can either be
-        an x,y tuple or an int equal to ``y * width + x``'.
-        """
+    def _extract_and_check_index(self, index):
         if isinstance(index, (tuple, list)):
             x = index[0]
             y = index[1]
@@ -403,24 +390,20 @@ class TileGrid:
             y = index // self._width
         if x > self._width or y > self._height or index >= len(self._tiles):
             raise ValueError("Tile index out of bounds")
+        return index
+
+    def __getitem__(self, index):
+        """Returns the tile index at the given index. The index can either be
+        an x,y tuple or an int equal to ``y * width + x``'.
+        """
+        index = self._extract_and_check_index(index)
         return self._tiles[index]
 
     def __setitem__(self, index, value):
         """Sets the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``.
         """
-        if isinstance(index, (tuple, list)):
-            x = index[0]
-            y = index[1]
-            index = y * self._width + x
-        elif isinstance(index, int):
-            x = index % self._width
-            y = index // self._width
-        if x > self._width or y > self._height or index >= len(self._tiles):
-            raise ValueError("Tile index out of bounds")
+        index = self._extract_and_check_index(index)
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
         self._tiles[index] = value
-
-
-# pylint: enable=too-many-instance-attributes

@@ -1,24 +1,6 @@
-# The MIT License (MIT)
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams for Adafruit Industries
 #
-# Copyright (c) 2020 Melissa LeBlanc-Williams for Adafruit Industries
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 """
 `displayio.parallelbus`
@@ -38,8 +20,6 @@ displayio for Blinka
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-# pylint: disable=unnecessary-pass, unused-argument
-
 
 class ParallelBus:
     """Manage updating a display over 8-bit parallel bus in the background while Python code
@@ -48,6 +28,7 @@ class ParallelBus:
     """
 
     def __init__(self, i2c_bus, *, device_address, reset=None):
+        # pylint: disable=unnecessary-pass
         """Create a ParallelBus object associated with the given pins. The
         bus is inferred from data0 by implying the next 7 additional pins on a given GPIO
         port.
@@ -65,11 +46,11 @@ class ParallelBus:
         """Performs a hardware reset via the reset pin. Raises an exception if called when
         no reset pin is available.
         """
-        pass
+        raise NotImplementedError("ParallelBus reset has not been implemented yet")
 
     def send(self, command, data):
         """Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
-        pass
+        raise NotImplementedError("ParallelBus send has not been implemented yet")

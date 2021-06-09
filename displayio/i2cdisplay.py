@@ -1,24 +1,6 @@
-# The MIT License (MIT)
+# SPDX-FileCopyrightText: 2020 Melissa LeBlanc-Williams for Adafruit Industries
 #
-# Copyright (c) 2020 Melissa LeBlanc-Williams for Adafruit Industries
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 """
 `displayio.i2cdisplay`
@@ -38,8 +20,6 @@ displayio for Blinka
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-# pylint: disable=unnecessary-pass, unused-argument
-
 
 class I2CDisplay:
     """Manage updating a display over I2C in the background while Python code runs.
@@ -47,6 +27,7 @@ class I2CDisplay:
     """
 
     def __init__(self, i2c_bus, *, device_address, reset=None):
+        # pylint: disable=unnecessary-pass
         """Create a I2CDisplay object associated with the given I2C bus and reset pin.
 
         The I2C bus and pins are then in use by the display until displayio.release_displays() is
@@ -77,6 +58,7 @@ class I2CDisplay:
             time.sleep(0.001)
             self._reset.value = True
             time.sleep(0.001)
+
 
     def send(self, is_command, data, *, toggle_every_byte=False):
         """Sends the given command value followed by the full set of data. Display state,
