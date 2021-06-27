@@ -40,7 +40,7 @@ class Group:
         self._max_size = max_size
         if not isinstance(scale, int) or scale < 1:
             raise ValueError("Scale must be >= 1")
-        self._scale = scale
+        self._scale = 1  # Use the setter below to actually set the scale
         self._group_x = x
         self._group_y = y
         self._hidden_group = False
@@ -48,9 +48,8 @@ class Group:
         self._supported_types = (TileGrid, Group)
         self._absolute_transform = None
         self.in_group = False
-        self._absolute_transform = Transform(
-            0, 0, 1, 1, self._scale, False, False, False
-        )
+        self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
+        self.scale = scale  # Set the scale via the setter
 
     def update_transform(self, parent_transform):
         """Update the parent transform and child transforms"""
