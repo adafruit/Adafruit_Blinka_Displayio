@@ -23,7 +23,10 @@ from displayio.display import Display
 from displayio.epaperdisplay import EPaperDisplay
 from displayio.fourwire import FourWire
 from displayio.group import Group
-from displayio.i2cdisplay import I2CDisplay
+try:
+    from displayio.i2cdisplay import I2CDisplay
+except NotImplementedError:
+    print("WARNING: I2CDisplay is not supported on this device.")
 from displayio.ondiskbitmap import OnDiskBitmap
 from displayio.palette import Palette
 from displayio.parallelbus import ParallelBus
