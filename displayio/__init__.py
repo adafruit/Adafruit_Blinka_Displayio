@@ -23,6 +23,7 @@ from displayio.display import Display
 from displayio.epaperdisplay import EPaperDisplay
 from displayio.fourwire import FourWire
 from displayio.group import Group
+
 try:
     from displayio.i2cdisplay import I2CDisplay
 except NotImplementedError:
