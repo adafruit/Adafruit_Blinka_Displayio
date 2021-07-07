@@ -23,16 +23,9 @@ displayio for Blinka
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-
 import time
 import busio
 import digitalio
-import microcontroller
-
-try:
-    from typing import Optional
-except ImportError:
-    pass
 
 
 class I2CDisplay:
@@ -40,13 +33,7 @@ class I2CDisplay:
     It doesn’t handle display initialization.
     """
 
-    def __init__(
-        self,
-        i2c_bus: busio.I2C,
-        *,
-        device_address: int,
-        reset: Optional[microcontroller.Pin] = None
-    ):
+    def __init__(self, i2c_bus: busio.I2C, *, device_address: int, reset=None):
         """Create a I2CDisplay object associated with the given I2C bus and reset pin.
 
         The I2C bus and pins are then in use by the display until displayio.release_displays() is
