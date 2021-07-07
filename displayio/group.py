@@ -46,10 +46,9 @@ class Group:
         self._hidden_group = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
-        self._absolute_transform = None
         self.in_group = False
         self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
-        self.scale = scale  # Set the scale via the setter
+        self._set_scale(scale)  # Set the scale via the setter
 
     def update_transform(self, parent_transform):
         """Update the parent transform and child transforms"""
@@ -164,6 +163,11 @@ class Group:
 
     @scale.setter
     def scale(self, value):
+        self._set_scale(value)
+
+    def _set_scale(self, value):
+        # This is method allows the scale to be set by this class even when
+        # the scale property is over-ridden by a subclass.
         if not isinstance(value, int) or value < 1:
             raise ValueError("Scale must be >= 1")
         if self._scale != value:
