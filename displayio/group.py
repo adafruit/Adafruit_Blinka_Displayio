@@ -28,16 +28,28 @@ Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirr
 
 
 class Group:
-    """Manage a group of sprites and groups and how they are inter-related."""
+    """
+    Manage a group of sprites and groups and how they are inter-related.
 
-    def __init__(self, *, max_size=4, scale=1, x=0, y=0):
-        """Create a Group of a given size and scale. Scale is in
-        one dimension. For example, scale=2 leads to a layer’s
-        pixel being 2x2 pixels when in the group.
+    Create a Group of a given scale. Scale is in one dimension. For example, scale=2
+    leads to a layer's pixel being 2x2 pixels when in the group.
+    """
+
+    def __init__(self, *, max_size=None, scale=1, x=0, y=0):
         """
-        if not isinstance(max_size, int) or max_size < 1:
-            raise ValueError("Max Size must be >= 1")
-        self._max_size = max_size
+        :param Optional(int) max_size: *DEPRECATED* This has been removed in CircuitPython 7 and
+            will be removed in a future version of ``Adafruit_Blinka_Displayio``
+        :param int scale: Scale of layer pixels in one dimension.
+        :param int x: Initial x position within the parent.
+        :param int y: Initial y position within the parent.
+        """
+
+        if max_size is not None:
+            print(
+                "The max_size parameter displayio.Group() has been deprecated. "
+                "Please remove max_size from your code."
+            )
+
         if not isinstance(scale, int) or scale < 1:
             raise ValueError("Scale must be >= 1")
         self._scale = 1  # Use the setter below to actually set the scale
@@ -93,8 +105,6 @@ class Group:
             raise ValueError("Invalid Group Member")
         if layer.in_group:
             raise ValueError("Layer already in a group.")
-        if len(self._layers) == self._max_size:
-            raise RuntimeError("Group full")
         self._layers.insert(index, layer)
         self._layer_update(index)
 

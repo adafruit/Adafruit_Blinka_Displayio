@@ -81,6 +81,9 @@ default_role = "any"
 #
 add_function_parentheses = True
 
+# Generate the class documentation from both the class docstring and the __init__ docstring
+autoclass_content = "both"
+
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
 
