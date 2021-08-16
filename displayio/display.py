@@ -44,14 +44,6 @@ class Display:
 
     Most people should not use this class directly. Use a specific display driver instead
     that will contain the initialization sequence at minimum.
-
-    .. class::
-        Display(display_bus, init_sequence, *, width, height, colstart=0, rowstart=0, rotation=0,
-        color_depth=16, grayscale=False, pixels_in_byte_share_row=True, bytes_per_cell=1,
-        reverse_pixels_in_byte=False, set_column_command=0x2a, set_row_command=0x2b,
-        write_ram_command=0x2c, set_vertical_scroll=0, backlight_pin=None, brightness_command=None,
-        brightness=1.0, auto_brightness=False, single_byte_bounds=False, data_as_commands=False,
-        auto_refresh=True, native_frames_per_second=60)
     """
 
     def __init__(
@@ -93,16 +85,18 @@ class Display:
         excluding any delay byte. The third through final bytes are the remaining command
         parameters. The next byte will begin a new command definition. Here is a portion of
         ILI9341 init code:
+
         .. code-block:: python
 
             init_sequence = (
-                b"\xe1\x0f\x00\x0E\x14\x03\x11\x07\x31\xC1\x48\x08\x0F\x0C\x31\x36\x0F"
-                b"\x11\x80\x78"# Exit Sleep then delay 0x78 (120ms)
-                b"\x29\x80\x78"# Display on then delay 0x78 (120ms)
+                b"\\xE1\\x0F\\x00\\x0E\\x14\\x03\\x11\\x07\\x31\
+\\xC1\\x48\\x08\\x0F\\x0C\\x31\\x36\\x0F"
+                b"\\x11\\x80\\x78"  # Exit Sleep then delay 0x78 (120ms)
+                b"\\x29\\x80\\x78"  # Display on then delay 0x78 (120ms)
             )
             display = displayio.Display(display_bus, init_sequence, width=320, height=240)
 
-        The first command is 0xe1 with 15 (0xf) parameters following. The second and third
+        The first command is 0xE1 with 15 (0x0F) parameters following. The second and third
         are 0x11 and 0x29 respectively with delays (0x80) of 120ms (0x78) and no parameters.
         Multiple byte literals (b”“) are merged together on load. The parens are needed to
         allow byte literals on subsequent lines.
