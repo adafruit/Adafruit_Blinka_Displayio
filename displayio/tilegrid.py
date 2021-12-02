@@ -179,7 +179,7 @@ class TileGrid:
 
     def _shade(self, pixel_value):
         if isinstance(self._pixel_shader, Palette):
-            return self._pixel_shader[pixel_value]["rgba"]
+            return self._pixel_shader[pixel_value]
         if isinstance(self._pixel_shader, ColorConverter):
             return self._pixel_shader.convert(pixel_value)
         return pixel_value

@@ -82,7 +82,7 @@ class Palette:
     def __getitem__(self, index):
         if not 0 <= index < len(self._colors):
             raise ValueError("Palette index out of range")
-        return self._colors[index]
+        return self._colors[index]["rgb888"]
 
     def make_transparent(self, palette_index):
         """Set the palette index to be a transparent color"""
