@@ -17,25 +17,36 @@ displayio for Blinka
 
 """
 
-from displayio.bitmap import Bitmap
-from displayio.colorconverter import ColorConverter
-from displayio.display import Display
-from displayio.epaperdisplay import EPaperDisplay
-from displayio.fourwire import FourWire
-from displayio.group import Group
-from displayio.i2cdisplay import I2CDisplay
-from displayio.ondiskbitmap import OnDiskBitmap
-from displayio.palette import Palette
-from displayio.parallelbus import ParallelBus
-from displayio.shape import Shape
-from displayio.tilegrid import TileGrid
-from displayio.display import displays
+# Needed for _DisplayBus
+from typing import Union
+import paralleldisplay
+from ._fourwire import FourWire
+from ._i2cdisplay import I2CDisplay
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
-def release_displays():
+_DisplayBus = Union[FourWire, I2CDisplay, paralleldisplay.ParallelBus]
+
+# Import the remaining name spaces
+# pylint: disable=wrong-import-position
+from ._bitmap import Bitmap
+from ._colorspace import Colorspace
+from ._colorconverter import ColorConverter
+from ._display import Display
+from ._epaperdisplay import EPaperDisplay
+from ._group import Group
+from ._ondiskbitmap import OnDiskBitmap
+from ._palette import Palette
+from ._shape import Shape
+from ._tilegrid import TileGrid
+from ._display import displays
+
+# pylint: enable=wrong-import-position
+
+
+def release_displays() -> None:
     """Releases any actively used displays so their busses and pins can be used again.
 
     Use this once in your code.py if you initialize a display. Place it right before the

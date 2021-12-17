@@ -20,39 +20,43 @@ displayio for Blinka
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
+from ._colorspace import Colorspace
+
 
 class ColorConverter:
     """Converts one color format to another. Color converter based on original displayio
     code for consistency.
     """
 
-    def __init__(self, *, dither=False):
+    def __init__(
+        self, *, input_colorspace: Colorspace = Colorspace.RGB888, dither: bool = False
+    ):
         """Create a ColorConverter object to convert color formats.
         Only supports rgb888 to RGB565 currently.
         :param bool dither: Adds random noise to dither the output image
         """
         self._dither = dither
         self._depth = 16
+        self._transparent_color = None
         self._rgba = False
 
-    # pylint: disable=no-self-use
-    def _compute_rgb565(self, color):
+    def _compute_rgb565(self, color: int):
         self._depth = 16
         return (color[0] & 0xF8) << 8 | (color[1] & 0xFC) << 3 | color[2] >> 3
 
-    def _compute_luma(self, color):
+    def _compute_luma(self, color: int):
         red = color >> 16
         green = (color >> 8) & 0xFF
         blue = color & 0xFF
         return (red * 19) / 255 + (green * 182) / 255 + (blue + 54) / 255
 
-    def _compute_chroma(self, color):
+    def _compute_chroma(self, color: int):
         red = color >> 16
         green = (color >> 8) & 0xFF
         blue = color & 0xFF
         return max(red, green, blue) - min(red, green, blue)
 
-    def _compute_hue(self, color):
+    def _compute_hue(self, color: int):
         red = color >> 16
         green = (color >> 8) & 0xFF
         blue = color & 0xFF
@@ -85,7 +89,7 @@ class ColorConverter:
     def _compute_tricolor(self):
         pass
 
-    def convert(self, color):
+    def convert(self, color: int) -> int:
         "Converts the given rgb888 color to RGB565"
         if isinstance(color, int):
             color = ((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, 255)
@@ -103,17 +107,25 @@ class ColorConverter:
             return color
         return self._compute_rgb565(color)
 
-    # pylint: enable=no-self-use
+    def make_transparent(self, color: int) -> None:
+        """Set the transparent color or index for the ColorConverter. This will
+        raise an Exception if there is already a selected transparent index.
+        """
+        self._transparent_color = color
+
+    def make_opaque(self, color: int) -> None:
+        """Make the ColorConverter be opaque and have no transparent pixels."""
+        self._transparent_color = None
 
     @property
-    def dither(self):
+    def dither(self) -> bool:
         """When true the color converter dithers the output by adding
         random noise when truncating to display bitdepth
         """
         return self._dither
 
     @dither.setter
-    def dither(self, value):
+    def dither(self, value: bool):
         if not isinstance(value, bool):
             raise ValueError("Value should be boolean")
         self._dither = value

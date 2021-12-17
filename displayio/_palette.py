@@ -17,6 +17,9 @@ displayio for Blinka
 
 """
 
+from typing import Optional, Union, Tuple
+import _typing
+
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
@@ -26,7 +29,7 @@ class Palette:
     format internally to save memory.
     """
 
-    def __init__(self, color_count):
+    def __init__(self, color_count: int):
         """Create a Palette object to store a set number of colors."""
         self._needs_refresh = False
 
@@ -63,11 +66,15 @@ class Palette:
 
         return color
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the number of colors in a Palette"""
         return len(self._colors)
 
-    def __setitem__(self, index, value):
+    def __setitem__(
+        self,
+        index: int,
+        value: Union[int, _typing.ReadableBuffer, Tuple[int, int, int]],
+    ) -> None:
         """Sets the pixel color at the given index. The index should be
         an integer in the range 0 to color_count-1.
 
@@ -79,17 +86,17 @@ class Palette:
             self._colors[index] = self._make_color(value)
             self._update_rgba(index)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Optional[int]:
         if not 0 <= index < len(self._colors):
             raise ValueError("Palette index out of range")
         return self._colors[index]["rgb888"]
 
-    def make_transparent(self, palette_index):
+    def make_transparent(self, palette_index: int) -> None:
         """Set the palette index to be a transparent color"""
         self._colors[palette_index]["transparent"] = True
         self._update_rgba(palette_index)
 
-    def make_opaque(self, palette_index):
+    def make_opaque(self, palette_index: int) -> None:
         """Set the palette index to be an opaque color"""
         self._colors[palette_index]["transparent"] = False
         self._update_rgba(palette_index)
@@ -109,3 +116,7 @@ class Palette:
             for _ in range(3):
                 palette += [0 if color["transparent"] else 255]
         return palette
+
+    def is_transparent(self, palette_index: int) -> bool:
+        """Returns True if the palette index is transparent. Returns False if opaque."""
+        return self._colors[palette_index]["transparent"]

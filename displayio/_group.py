@@ -17,8 +17,10 @@ displayio for Blinka
 
 """
 
+from __future__ import annotations
+from typing import Union, Callable
 from recordclass import recordclass
-from displayio.tilegrid import TileGrid
+from ._tilegrid import TileGrid
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -35,20 +37,12 @@ class Group:
     leads to a layer's pixel being 2x2 pixels when in the group.
     """
 
-    def __init__(self, *, max_size=None, scale=1, x=0, y=0):
+    def __init__(self, *, scale: int = 1, x: int = 0, y: int = 0):
         """
-        :param Optional(int) max_size: *DEPRECATED* This has been removed in CircuitPython 7 and
-            will be removed in a future version of ``Adafruit_Blinka_Displayio``
         :param int scale: Scale of layer pixels in one dimension.
         :param int x: Initial x position within the parent.
         :param int y: Initial y position within the parent.
         """
-
-        if max_size is not None:
-            print(
-                "The max_size parameter displayio.Group() has been deprecated. "
-                "Please remove max_size from your code."
-            )
 
         if not isinstance(scale, int) or scale < 1:
             raise ValueError("Scale must be >= 1")
@@ -62,7 +56,7 @@ class Group:
         self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
         self._set_scale(scale)  # Set the scale via the setter
 
-    def update_transform(self, parent_transform):
+    def _update_transform(self, parent_transform):
         """Update the parent transform and child transforms"""
         self.in_group = parent_transform is not None
         if self.in_group:
@@ -81,25 +75,29 @@ class Group:
         self._update_child_transforms()
 
     def _update_child_transforms(self):
+        # pylint: disable=protected-access
         if self.in_group:
             for layer in self._layers:
-                layer.update_transform(self._absolute_transform)
+                layer._update_transform(self._absolute_transform)
+        # pylint: enable=protected-access
 
     def _removal_cleanup(self, index):
         layer = self._layers[index]
-        layer.update_transform(None)
+        layer._update_transform(None)  # pylint: disable=protected-access
 
     def _layer_update(self, index):
+        # pylint: disable=protected-access
         layer = self._layers[index]
-        layer.update_transform(self._absolute_transform)
+        layer._update_transform(self._absolute_transform)
+        # pylint: enable=protected-access
 
-    def append(self, layer):
+    def append(self, layer: Union[Group, TileGrid]) -> None:
         """Append a layer to the group. It will be drawn
         above other layers.
         """
         self.insert(len(self._layers), layer)
 
-    def insert(self, index, layer):
+    def insert(self, index: int, layer: Union[Group, TileGrid]) -> None:
         """Insert a layer into the group."""
         if not isinstance(layer, self._supported_types):
             raise ValueError("Invalid Group Member")
@@ -108,38 +106,38 @@ class Group:
         self._layers.insert(index, layer)
         self._layer_update(index)
 
-    def index(self, layer):
+    def index(self, layer: Union[Group, TileGrid]) -> int:
         """Returns the index of the first copy of layer.
         Raises ValueError if not found.
         """
         return self._layers.index(layer)
 
-    def pop(self, index=-1):
+    def pop(self, index=-1) -> Union[Group, TileGrid]:
         """Remove the ith item and return it."""
         self._removal_cleanup(index)
         return self._layers.pop(index)
 
-    def remove(self, layer):
+    def remove(self, layer) -> None:
         """Remove the first copy of layer. Raises ValueError
         if it is not present."""
         index = self.index(layer)
         self._layers.pop(index)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the number of layers in a Group"""
         return len(self._layers)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Union[Group, TileGrid]:
         """Returns the value at the given index."""
         return self._layers[index]
 
-    def __setitem__(self, index, value):
+    def __setitem__(self, index, value) -> None:
         """Sets the value at the given index."""
         self._removal_cleanup(index)
         self._layers[index] = value
         self._layer_update(index)
 
-    def __delitem__(self, index):
+    def __delitem__(self, index) -> None:
         """Deletes the value at the given index."""
         del self._layers[index]
 
@@ -151,31 +149,35 @@ class Group:
             if isinstance(layer, (Group, TileGrid)):
                 layer._fill_area(buffer)  # pylint: disable=protected-access
 
+    def sort(self, key: Callable, reverse: bool) -> None:
+        """Sort the members of the group."""
+        self._layers.sort(key=key, reverse=reverse)
+
     @property
-    def hidden(self):
+    def hidden(self) -> bool:
         """True when the Group and all of it’s layers are not visible. When False, the
         Group’s layers are visible if they haven’t been hidden.
         """
         return self._hidden_group
 
     @hidden.setter
-    def hidden(self, value):
+    def hidden(self, value: bool):
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
         self._hidden_group = bool(value)
 
     @property
-    def scale(self):
+    def scale(self) -> int:
         """Scales each pixel within the Group in both directions. For example, when
         scale=2 each pixel will be represented by 2x2 pixels.
         """
         return self._scale
 
     @scale.setter
-    def scale(self, value):
+    def scale(self, value: int):
         self._set_scale(value)
 
-    def _set_scale(self, value):
+    def _set_scale(self, value: int):
         # This is method allows the scale to be set by this class even when
         # the scale property is over-ridden by a subclass.
         if not isinstance(value, int) or value < 1:
@@ -194,12 +196,12 @@ class Group:
             self._update_child_transforms()
 
     @property
-    def x(self):
+    def x(self) -> int:
         """X position of the Group in the parent."""
         return self._group_x
 
     @x.setter
-    def x(self, value):
+    def x(self, value: int):
         if not isinstance(value, int):
             raise ValueError("x must be an integer")
         if self._group_x != value:
@@ -213,12 +215,12 @@ class Group:
             self._update_child_transforms()
 
     @property
-    def y(self):
+    def y(self) -> int:
         """Y position of the Group in the parent."""
         return self._group_y
 
     @y.setter
-    def y(self, value):
+    def y(self, value: int):
         if not isinstance(value, int):
             raise ValueError("y must be an integer")
         if self._group_y != value:
