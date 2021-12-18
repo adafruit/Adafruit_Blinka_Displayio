@@ -39,18 +39,21 @@ class ColorConverter:
         self._depth = 16
         self._transparent_color = None
         self._rgba = False
+        self._input_colorspace = input_colorspace
 
     def _compute_rgb565(self, color: int):
         self._depth = 16
         return (color[0] & 0xF8) << 8 | (color[1] & 0xFC) << 3 | color[2] >> 3
 
-    def _compute_luma(self, color: int):
+    @staticmethod
+    def _compute_luma(color: int):
         red = color >> 16
         green = (color >> 8) & 0xFF
         blue = color & 0xFF
         return (red * 19) / 255 + (green * 182) / 255 + (blue + 54) / 255
 
-    def _compute_chroma(self, color: int):
+    @staticmethod
+    def _compute_chroma(color: int):
         red = color >> 16
         green = (color >> 8) & 0xFF
         blue = color & 0xFF
@@ -76,7 +79,8 @@ class ColorConverter:
 
         return hue
 
-    def _dither_noise_1(self, noise):
+    @staticmethod
+    def _dither_noise_1(noise):
         noise = (noise >> 13) ^ noise
         more_noise = (
             noise * (noise * noise * 60493 + 19990303) + 1376312589
@@ -114,6 +118,7 @@ class ColorConverter:
         self._transparent_color = color
 
     def make_opaque(self, color: int) -> None:
+        # pylint: disable=unused-argument
         """Make the ColorConverter be opaque and have no transparent pixels."""
         self._transparent_color = None
 

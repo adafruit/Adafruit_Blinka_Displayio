@@ -131,12 +131,12 @@ class Bitmap:
         y2: int,
         skip_index: int,
     ) -> None:
-        # pylint: disable=unnecessary-pass
+        # pylint: disable=unnecessary-pass, invalid-name
         """Inserts the source_bitmap region defined by rectangular boundaries"""
         pass
 
     def dirty(self, x1: int = 0, y1: int = 0, x2: int = -1, y2: int = -1) -> None:
-        # pylint: disable=unnecessary-pass
+        # pylint: disable=unnecessary-pass, invalid-name
         """Inform displayio of bitmap updates done via the buffer protocol."""
         pass
 

@@ -17,20 +17,9 @@ displayio for Blinka
 
 """
 
-# Needed for _DisplayBus
 from typing import Union
-import paralleldisplay
 from ._fourwire import FourWire
 from ._i2cdisplay import I2CDisplay
-
-__version__ = "0.0.0-auto.0"
-__repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
-
-_DisplayBus = Union[FourWire, I2CDisplay, paralleldisplay.ParallelBus]
-
-# Import the remaining name spaces
-# pylint: disable=wrong-import-position
 from ._bitmap import Bitmap
 from ._colorspace import Colorspace
 from ._colorconverter import ColorConverter
@@ -42,8 +31,10 @@ from ._palette import Palette
 from ._shape import Shape
 from ._tilegrid import TileGrid
 from ._display import displays
+from ._displaybus import _DisplayBus
 
-# pylint: enable=wrong-import-position
+__version__ = "0.0.0-auto.0"
+__repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 def release_displays() -> None:

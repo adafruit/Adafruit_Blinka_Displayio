@@ -86,8 +86,8 @@ class I2CDisplay:
         self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + data))
         self._end_transaction()
 
-    # pylint: disable=unused-argument
     def _send(self, data_type: int, chip_select: int, data: _typing.ReadableBuffer):
+        # pylint: disable=unused-argument
         if data_type == DISPLAY_COMMAND:
             n = len(data)
             if n > 0:
@@ -102,8 +102,6 @@ class I2CDisplay:
             data_bytes[0] = 0x40
             data_bytes[1:] = data
             self._i2c.writeto(self._dev_addr, buffer=data_bytes, stop=True)
-
-    # pylint: enable=unused-argument
 
     def _end_transaction(self) -> None:
         """Release the bus after sending data."""

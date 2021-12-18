@@ -79,17 +79,16 @@ class Group:
         if self.in_group:
             for layer in self._layers:
                 layer._update_transform(self._absolute_transform)
-        # pylint: enable=protected-access
 
     def _removal_cleanup(self, index):
+        # pylint: disable=protected-access
         layer = self._layers[index]
-        layer._update_transform(None)  # pylint: disable=protected-access
+        layer._update_transform(None)
 
     def _layer_update(self, index):
         # pylint: disable=protected-access
         layer = self._layers[index]
         layer._update_transform(self._absolute_transform)
-        # pylint: enable=protected-access
 
     def append(self, layer: Union[Group, TileGrid]) -> None:
         """Append a layer to the group. It will be drawn

@@ -17,11 +17,11 @@ displayio for Blinka
 
 """
 
+from typing import Optional
 import microcontroller
 import _typing
 from ._group import Group
-from . import _DisplayBus
-from typing import Optional
+from ._displaybus import _DisplayBus
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -69,7 +69,7 @@ class EPaperDisplay:
         always_toggle_chip_select: bool = False,
         grayscale: bool = False,
     ):
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-locals, unused-argument
         """
         Create a EPaperDisplay object on the given display bus (displayio.FourWire or
         paralleldisplay.ParallelBus).

@@ -20,16 +20,16 @@ displayio for Blinka
 import time
 import struct
 import threading
+from typing import Optional
 import digitalio
 from PIL import Image
 import numpy
 import microcontroller
 from recordclass import recordclass
-from ._colorconverter import ColorConverter
 import _typing
+from ._displaybus import _DisplayBus
+from ._colorconverter import ColorConverter
 from ._group import Group
-from displayio import _DisplayBus
-from typing import Optional
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
@@ -87,7 +87,7 @@ class Display:
         SH1107_addressing: bool = False,
         set_vertical_scroll: int = 0,
     ):
-        # pylint: disable=unused-argument,too-many-locals
+        # pylint: disable=unused-argument,too-many-locals,invalid-name
         """Create a Display object on the given display bus (`displayio.FourWire` or
         `paralleldisplay.ParallelBus`).
 
@@ -179,7 +179,8 @@ class Display:
             i += 2 + data_size
 
     def _send(self, command, data):
-        self._bus._begin_transaction()  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        self._bus._begin_transaction()
         if self._data_as_commands:
             self._bus._send(
                 DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command] + data)
@@ -189,9 +190,10 @@ class Display:
                 DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
             )
             self._bus._send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
-        self._bus._end_transaction()  # pylint: disable=protected-access
+        self._bus._end_transaction()
 
     def _send_pixels(self, data):
+        # pylint: disable=protected-access
         if not self._data_as_commands:
             self._bus._send(
                 DISPLAY_COMMAND,
@@ -334,7 +336,7 @@ class Display:
 
     def _encode_pos(self, x, y):
         """Encode a postion into bytes."""
-        return struct.pack(self._bounds_encoding, x, y)
+        return struct.pack(self._bounds_encoding, x, y)  # pylint: disable=no-member
 
     def fill_row(
         self, y: int, buffer: _typing.WriteableBuffer
