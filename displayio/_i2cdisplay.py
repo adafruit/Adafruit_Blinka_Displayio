@@ -20,12 +20,14 @@ displayio for Blinka
 
 """
 
-__version__ = "0.0.0-auto.0"
-__repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
 import time
 import busio
 import digitalio
+import _typing
+from ._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
+
+__version__ = "0.0.0-auto.0"
+__repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class I2CDisplay:
@@ -69,24 +71,24 @@ class I2CDisplay:
         time.sleep(0.0001)
         self._reset.value = True
 
-    def begin_transaction(self) -> None:
-        """
-        Lock the bus before sending data.
-        """
+    def _begin_transaction(self) -> None:
+        """Lock the bus before sending data."""
         while not self._i2c.try_lock():
             pass
 
-    def send(self, command: bool, data, *, toggle_every_byte=False) -> None:
-        # pylint: disable=unused-argument
+    def send(self, command: int, data: _typing.ReadableBuffer) -> None:
         """
         Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
-        # NOTE: we have to have a toggle_every_byte parameter, which we ignore,
-        # because Display._write() sets it regardless of bus type.
+        self._begin_transaction()
+        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + data))
+        self._end_transaction()
 
-        if command:
+    def _send(self, data_type: int, chip_select: int, data: _typing.ReadableBuffer):
+        # pylint: disable=unused-argument
+        if data_type == DISPLAY_COMMAND:
             n = len(data)
             if n > 0:
                 command_bytes = bytearray(n * 2)
@@ -95,15 +97,12 @@ class I2CDisplay:
                     command_bytes[2 * i + 1] = data[i]
 
                 self._i2c.writeto(self._dev_addr, buffer=command_bytes, stop=True)
-
         else:
             data_bytes = bytearray(len(data) + 1)
             data_bytes[0] = 0x40
             data_bytes[1:] = data
             self._i2c.writeto(self._dev_addr, buffer=data_bytes, stop=True)
 
-    def end_transaction(self) -> None:
-        """
-        Release the bus after sending data.
-        """
+    def _end_transaction(self) -> None:
+        """Release the bus after sending data."""
         self._i2c.unlock()

@@ -17,13 +17,14 @@ displayio for Blinka
 
 """
 
+from typing import Union, Optional, Tuple
 from recordclass import recordclass
 from PIL import Image
-from displayio.bitmap import Bitmap
-from displayio.colorconverter import ColorConverter
-from displayio.ondiskbitmap import OnDiskBitmap
-from displayio.shape import Shape
-from displayio.palette import Palette
+from ._bitmap import Bitmap
+from ._colorconverter import ColorConverter
+from ._ondiskbitmap import OnDiskBitmap
+from ._shape import Shape
+from ._palette import Palette
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -42,16 +43,16 @@ class TileGrid:
 
     def __init__(
         self,
-        bitmap,
+        bitmap: Union[Bitmap, OnDiskBitmap, Shape],
         *,
-        pixel_shader,
-        width=1,
-        height=1,
-        tile_width=None,
-        tile_height=None,
-        default_tile=0,
-        x=0,
-        y=0
+        pixel_shader: Union[ColorConverter, Palette],
+        width: int = 1,
+        height: int = 1,
+        tile_width: Optional[int] = None,
+        tile_height: Optional[int] = None,
+        default_tile: int = 0,
+        x: int = 0,
+        y: int = 0,
     ):
         """Create a TileGrid object. The bitmap is source for 2d pixels. The pixel_shader is
         used to convert the value and its location to a display native pixel color. This may
@@ -86,10 +87,8 @@ class TileGrid:
             tile_width = bitmap_width
         if tile_height is None or tile_width == 0:
             tile_height = bitmap_height
-        if tile_width < 1:
-            tile_width = 1
-        if tile_height < 1:
-            tile_height = 1
+        if tile_width < 1 or tile_height < 1:
+            raise ValueError("Tile width and height must be greater than 0")
         if bitmap_width % tile_width != 0:
             raise ValueError("Tile width must exactly divide bitmap width")
         self._tile_width = tile_width
@@ -106,7 +105,7 @@ class TileGrid:
         self._current_area = Rectangle(0, 0, self._pixel_width, self._pixel_height)
         self._moved = False
 
-    def update_transform(self, absolute_transform):
+    def _update_transform(self, absolute_transform):
         """Update the parent transform and child transforms"""
         self._absolute_transform = absolute_transform
         if self._absolute_transform is not None:
@@ -298,24 +297,24 @@ class TileGrid:
             buffer.alpha_composite(image, (x, y), source=(source_x, source_y))
 
     @property
-    def hidden(self):
+    def hidden(self) -> bool:
         """True when the TileGrid is hidden. This may be False even
         when a part of a hidden Group."""
         return self._hidden_tilegrid
 
     @hidden.setter
-    def hidden(self, value):
+    def hidden(self, value: bool):
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
         self._hidden_tilegrid = bool(value)
 
     @property
-    def x(self):
+    def x(self) -> int:
         """X position of the left edge in the parent."""
         return self._x
 
     @x.setter
-    def x(self, value):
+    def x(self, value: int):
         if not isinstance(value, int):
             raise TypeError("X should be a integer type")
         if self._x != value:
@@ -323,12 +322,12 @@ class TileGrid:
             self._update_current_x()
 
     @property
-    def y(self):
+    def y(self) -> int:
         """Y position of the top edge in the parent."""
         return self._y
 
     @y.setter
-    def y(self, value):
+    def y(self, value: int):
         if not isinstance(value, int):
             raise TypeError("Y should be a integer type")
         if self._y != value:
@@ -336,38 +335,38 @@ class TileGrid:
             self._update_current_y()
 
     @property
-    def flip_x(self):
+    def flip_x(self) -> bool:
         """If true, the left edge rendered will be the right edge of the right-most tile."""
         return self._flip_x
 
     @flip_x.setter
-    def flip_x(self, value):
+    def flip_x(self, value: bool):
         if not isinstance(value, bool):
             raise TypeError("Flip X should be a boolean type")
         if self._flip_x != value:
             self._flip_x = value
 
     @property
-    def flip_y(self):
+    def flip_y(self) -> bool:
         """If true, the top edge rendered will be the bottom edge of the bottom-most tile."""
         return self._flip_y
 
     @flip_y.setter
-    def flip_y(self, value):
+    def flip_y(self, value: bool):
         if not isinstance(value, bool):
             raise TypeError("Flip Y should be a boolean type")
         if self._flip_y != value:
             self._flip_y = value
 
     @property
-    def transpose_xy(self):
-        """If true, the TileGrid’s axis will be swapped. When combined with mirroring, any 90
+    def transpose_xy(self) -> bool:
+        """If true, the TileGrid's axis will be swapped. When combined with mirroring, any 90
         degree rotation can be achieved along with the corresponding mirrored version.
         """
         return self._transpose_xy
 
     @transpose_xy.setter
-    def transpose_xy(self, value):
+    def transpose_xy(self, value: bool):
         if not isinstance(value, bool):
             raise TypeError("Transpose XY should be a boolean type")
         if self._transpose_xy != value:
@@ -376,7 +375,7 @@ class TileGrid:
             self._update_current_y()
 
     @property
-    def pixel_shader(self):
+    def pixel_shader(self) -> Union[ColorConverter, Palette]:
         """The pixel shader of the tilegrid."""
         return self._pixel_shader
 
@@ -392,14 +391,14 @@ class TileGrid:
             raise ValueError("Tile index out of bounds")
         return index
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
         """Returns the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``'.
         """
         index = self._extract_and_check_index(index)
         return self._tiles[index]
 
-    def __setitem__(self, index, value):
+    def __setitem__(self, index: Union[Tuple[int, int], int], value: int) -> None:
         """Sets the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``.
         """

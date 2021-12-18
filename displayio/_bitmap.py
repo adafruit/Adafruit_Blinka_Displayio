@@ -17,6 +17,8 @@ displayio for Blinka
 
 """
 
+from __future__ import annotations
+from typing import Union, Tuple
 from recordclass import recordclass
 from PIL import Image
 
@@ -29,7 +31,7 @@ Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 class Bitmap:
     """Stores values of a certain size in a 2D array"""
 
-    def __init__(self, width, height, value_count):
+    def __init__(self, width: int, height: int, value_count: int):
         """Create a Bitmap object with the given fixed size. Each pixel stores a value that is
         used to index into a corresponding palette. This enables differently colored sprites to
         share the underlying Bitmap. value_count is used to minimize the memory used to store
@@ -61,7 +63,7 @@ class Bitmap:
         self._image = Image.new("P", (width, height), 0)
         self._dirty_area = Rectangle(0, 0, width, height)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
         """
         Returns the value at the given index. The index can either be
         an x,y tuple or an int equal to `y * width + x`.
@@ -75,10 +77,10 @@ class Bitmap:
             raise TypeError("Index is not an int, list, or tuple")
 
         if x > self._image.width or y > self._image.height:
-            raise ValueError("Index {} is out of range".format(index))
+            raise ValueError(f"Index {index} is out of range")
         return self._image.getpixel((x, y))
 
-    def __setitem__(self, index, value):
+    def __setitem__(self, index: Union[Tuple[int, int], int], value: int) -> None:
         """
         Sets the value at the given index. The index can either be
         an x,y tuple or an int equal to `y * width + x`.
@@ -112,17 +114,38 @@ class Bitmap:
         self._dirty_area.x1 = 0
         self._dirty_area.x2 = 0
 
-    def fill(self, value):
+    def fill(self, value: int) -> None:
         """Fills the bitmap with the supplied palette index value."""
         self._image = Image.new("P", (self._bmp_width, self._bmp_height), value)
         self._dirty_area = Rectangle(0, 0, self._bmp_width, self._bmp_height)
 
+    def blit(
+        self,
+        x: int,
+        y: int,
+        source_bitmap: Bitmap,
+        *,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        skip_index: int,
+    ) -> None:
+        # pylint: disable=unnecessary-pass, invalid-name
+        """Inserts the source_bitmap region defined by rectangular boundaries"""
+        pass
+
+    def dirty(self, x1: int = 0, y1: int = 0, x2: int = -1, y2: int = -1) -> None:
+        # pylint: disable=unnecessary-pass, invalid-name
+        """Inform displayio of bitmap updates done via the buffer protocol."""
+        pass
+
     @property
-    def width(self):
+    def width(self) -> int:
         """Width of the bitmap. (read only)"""
         return self._bmp_width
 
     @property
-    def height(self):
+    def height(self) -> int:
         """Height of the bitmap. (read only)"""
         return self._bmp_height

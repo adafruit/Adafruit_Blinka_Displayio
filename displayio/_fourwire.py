@@ -18,7 +18,17 @@ displayio for Blinka
 """
 
 import time
+from typing import Optional
 import digitalio
+import busio
+import microcontroller
+import _typing
+from ._constants import (
+    CHIP_SELECT_TOGGLE_EVERY_BYTE,
+    CHIP_SELECT_UNTOUCHED,
+    DISPLAY_COMMAND,
+    DISPLAY_DATA,
+)
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -31,14 +41,14 @@ class FourWire:
 
     def __init__(
         self,
-        spi_bus,
+        spi_bus: busio.SPI,
         *,
-        command,
-        chip_select,
-        reset=None,
-        baudrate=24000000,
-        polarity=0,
-        phase=0
+        command: microcontroller.Pin,
+        chip_select: microcontroller.Pin,
+        reset: Optional[microcontroller.Pin] = None,
+        baudrate: int = 24000000,
+        polarity: int = 0,
+        phase: int = 0,
     ):
         """Create a FourWire object associated with the given pins.
 
@@ -72,7 +82,7 @@ class FourWire:
         if self._reset is not None:
             self._reset.deinit()
 
-    def reset(self):
+    def reset(self) -> None:
         """Performs a hardware reset via the reset pin.
         Raises an exception if called when no reset pin is available.
         """
@@ -82,13 +92,29 @@ class FourWire:
             self._reset.value = True
             time.sleep(0.001)
 
-    def send(self, is_command, data, *, toggle_every_byte=False):
-        """Sends the given command value followed by the full set of data. Display state,
+    def send(
+        self, command, data: _typing.ReadableBuffer, *, toggle_every_byte: bool = False
+    ) -> None:
+        """
+        Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
-        self._dc.value = not is_command
-        if toggle_every_byte:
+        if not 0 <= command <= 255:
+            raise ValueError("Command must be an int between 0 and 255")
+        chip_select = (
+            CHIP_SELECT_TOGGLE_EVERY_BYTE
+            if toggle_every_byte
+            else CHIP_SELECT_UNTOUCHED
+        )
+        self._begin_transaction()
+        self._send(DISPLAY_COMMAND, chip_select, command)
+        self._send(DISPLAY_DATA, chip_select, data)
+        self._end_transaction()
+
+    def _send(self, data_type: int, chip_select: int, data: _typing.ReadableBuffer):
+        self._dc.value = data_type == DISPLAY_DATA
+        if chip_select == CHIP_SELECT_TOGGLE_EVERY_BYTE:
             for byte in data:
                 self._spi.write(bytes([byte]))
                 self._chip_select.value = True
@@ -97,7 +123,7 @@ class FourWire:
         else:
             self._spi.write(data)
 
-    def begin_transaction(self):
+    def _begin_transaction(self):
         """Begin the SPI transaction by locking, configuring, and setting Chip Select"""
         while not self._spi.try_lock():
             pass
@@ -106,7 +132,7 @@ class FourWire:
         )
         self._chip_select.value = False
 
-    def end_transaction(self):
+    def _end_transaction(self):
         """End the SPI transaction by unlocking and setting Chip Select"""
         self._chip_select.value = True
         self._spi.unlock()

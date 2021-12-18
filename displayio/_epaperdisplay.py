@@ -17,6 +17,11 @@ displayio for Blinka
 
 """
 
+from typing import Optional
+import microcontroller
+import _typing
+from ._group import Group
+from ._displaybus import _DisplayBus
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -36,38 +41,38 @@ class EPaperDisplay:
 
     def __init__(
         self,
-        display_bus,
-        start_sequence,
-        stop_sequence,
+        display_bus: _DisplayBus,
+        start_sequence: _typing.ReadableBuffer,
+        stop_sequence: _typing.ReadableBuffer,
         *,
-        width,
-        height,
-        ram_width,
-        ram_height,
-        colstart=0,
-        rowstart=0,
-        rotation=0,
-        set_column_window_command=None,
-        set_row_window_command=None,
-        set_current_column_command=None,
-        set_current_row_command=None,
-        write_black_ram_command,
-        black_bits_inverted=False,
-        write_color_ram_command=None,
-        color_bits_inverted=False,
-        highlight_color=0x000000,
-        refresh_display_command,
-        refresh_time=40,
-        busy_pin=None,
-        busy_state=True,
-        seconds_per_frame=180,
-        always_toggle_chip_select=False,
-        grayscale=False,
+        width: int,
+        height: int,
+        ram_width: int,
+        ram_height: int,
+        colstart: int = 0,
+        rowstart: int = 0,
+        rotation: int = 0,
+        set_column_window_command: Optional[int] = None,
+        set_row_window_command: Optional[int] = None,
+        set_current_column_command: Optional[int] = None,
+        set_current_row_command: Optional[int] = None,
+        write_black_ram_command: int,
+        black_bits_inverted: bool = False,
+        write_color_ram_command: Optional[int] = None,
+        color_bits_inverted: bool = False,
+        highlight_color: int = 0x000000,
+        refresh_display_command: int,
+        refresh_time: float = 40.0,
+        busy_pin: Optional[microcontroller.Pin] = None,
+        busy_state: bool = True,
+        seconds_per_frame: float = 180.0,
+        always_toggle_chip_select: bool = False,
+        grayscale: bool = False,
     ):
-        # pylint: disable=too-many-locals,unnecessary-pass
+        # pylint: disable=too-many-locals, unused-argument
         """
         Create a EPaperDisplay object on the given display bus (displayio.FourWire or
-        displayio.ParallelBus).
+        paralleldisplay.ParallelBus).
 
         The start_sequence and stop_sequence are bitpacked to minimize the ram impact. Every
         command begins with a command byte followed by a byte to determine the parameter
@@ -112,16 +117,18 @@ class EPaperDisplay:
         :param bool always_toggle_chip_select: When True, chip select is toggled every byte
         :param bool grayscale: When true, the color ram is the low bit of 2-bit grayscale
         """
-        pass
+        self._bus = display_bus
+        self._width = width
+        self._height = height
 
-    def show(self, group):
+    def show(self, group: Group) -> None:
         # pylint: disable=unnecessary-pass
         """Switches to displaying the given group of layers. When group is None, the default
         CircuitPython terminal will be shown (eventually).
         """
         pass
 
-    def refresh(self):
+    def refresh(self) -> None:
         # pylint: disable=unnecessary-pass
         """Refreshes the display immediately or raises an exception if too soon. Use
         ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur.
@@ -129,24 +136,21 @@ class EPaperDisplay:
         pass
 
     @property
-    def time_to_refresh(self):
+    def time_to_refresh(self) -> float:
         """Time, in fractional seconds, until the ePaper display can be refreshed."""
-        return 0
+        return 0.0
 
     @property
-    def width(self):
-        # pylint: disable=unnecessary-pass
+    def width(self) -> int:
         """Display Width"""
-        pass
+        return self._width
 
     @property
-    def height(self):
-        # pylint: disable=unnecessary-pass
+    def height(self) -> int:
         """Display Height"""
-        pass
+        return self._height
 
     @property
-    def bus(self):
-        # pylint: disable=unnecessary-pass
+    def bus(self) -> _DisplayBus:
         """Current Display Bus"""
-        pass
+        return self._bus

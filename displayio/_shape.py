@@ -18,7 +18,7 @@ displayio for Blinka
 
 """
 
-from displayio.bitmap import Bitmap
+from ._bitmap import Bitmap
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -30,7 +30,9 @@ class Shape(Bitmap):
     full row.
     """
 
-    def __init__(self, width, height, *, mirror_x=False, mirror_y=False):
+    def __init__(
+        self, width: int, height: int, *, mirror_x: bool = False, mirror_y: bool = False
+    ):
         # pylint: disable=unused-argument
         """Create a Shape object with the given fixed size. Each pixel is one bit and is
         stored by the column boundaries of the shape on each row. Each row’s boundary
@@ -38,7 +40,7 @@ class Shape(Bitmap):
         """
         super().__init__(width, height, 2)
 
-    def set_boundary(self, y, start_x, end_x):
+    def set_boundary(self, y: int, start_x: int, end_x: int) -> None:
         # pylint: disable=unnecessary-pass
         """Loads pre-packed data into the given row."""
         pass

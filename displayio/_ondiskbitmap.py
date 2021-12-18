@@ -17,7 +17,10 @@ displayio for Blinka
 
 """
 
+from typing import Union, BinaryIO
 from PIL import Image
+from ._colorconverter import ColorConverter
+from ._palette import Palette
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -29,20 +32,25 @@ class OnDiskBitmap:
     pixel load times. These load times may result in frame tearing where only part of the
     image is visible."""
 
-    def __init__(self, file):
+    def __init__(self, file: Union[str, BinaryIO]):
         self._image = Image.open(file).convert("RGBA")
 
     @property
-    def width(self):
+    def width(self) -> int:
         """Width of the bitmap. (read only)"""
         return self._image.width
 
     @property
-    def height(self):
+    def height(self) -> int:
         """Height of the bitmap. (read only)"""
         return self._image.height
 
-    def __getitem__(self, index):
+    @property
+    def pixel_shader(self) -> Union[ColorConverter, Palette]:
+        """Height of the bitmap. (read only)"""
+        return self._image.height
+
+    def __getitem__(self, index: Union[tuple, list, int]) -> int:
         """
         Returns the value at the given index. The index can either be
         an x,y tuple or an int equal to `y * width + x`.

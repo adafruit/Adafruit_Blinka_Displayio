@@ -7,10 +7,13 @@
 
 .. automodule:: displayio
     :members: Bitmap, ColorConverter, Display, EPaperDisplay, FourWire, Group, I2CDisplay,
-        OnDiskBitmap, Palette, ParallelBus, Shape, TileGrid
+        OnDiskBitmap, Palette, Shape, TileGrid
 
 .. automodule:: fontio
     :members:
 
 .. automodule:: terminalio
+    :members:
+
+.. automodule:: paralleldisplay
     :members:
