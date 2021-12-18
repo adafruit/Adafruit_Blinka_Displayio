@@ -17,12 +17,11 @@ Type aliases for Blinka
 
 """
 
+from typing import Union
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
-
-from typing import Union
 
 WriteableBuffer = Union[
     bytearray,

@@ -111,32 +111,36 @@ class Group:
         """
         return self._layers.index(layer)
 
-    def pop(self, index=-1) -> Union[Group, TileGrid]:
+    def pop(self, index: int = -1) -> Union[Group, TileGrid]:
         """Remove the ith item and return it."""
         self._removal_cleanup(index)
         return self._layers.pop(index)
 
-    def remove(self, layer) -> None:
+    def remove(self, layer: Union[Group, TileGrid]) -> None:
         """Remove the first copy of layer. Raises ValueError
         if it is not present."""
         index = self.index(layer)
         self._layers.pop(index)
 
+    def __bool__(self) -> bool:
+        """Returns if there are any layers"""
+        return len(self._layers) > 0
+
     def __len__(self) -> int:
         """Returns the number of layers in a Group"""
         return len(self._layers)
 
-    def __getitem__(self, index) -> Union[Group, TileGrid]:
+    def __getitem__(self, index: int) -> Union[Group, TileGrid]:
         """Returns the value at the given index."""
         return self._layers[index]
 
-    def __setitem__(self, index, value) -> None:
+    def __setitem__(self, index: int, value: Union[Group, TileGrid]) -> None:
         """Sets the value at the given index."""
         self._removal_cleanup(index)
         self._layers[index] = value
         self._layer_update(index)
 
-    def __delitem__(self, index) -> None:
+    def __delitem__(self, index: int) -> None:
         """Deletes the value at the given index."""
         del self._layers[index]
 
@@ -154,8 +158,8 @@ class Group:
 
     @property
     def hidden(self) -> bool:
-        """True when the Group and all of it’s layers are not visible. When False, the
-        Group’s layers are visible if they haven’t been hidden.
+        """True when the Group and all of it's layers are not visible. When False, the
+        Group’s layers are visible if they haven't been hidden.
         """
         return self._hidden_group
 

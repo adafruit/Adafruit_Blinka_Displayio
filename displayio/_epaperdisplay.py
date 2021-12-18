@@ -62,10 +62,10 @@ class EPaperDisplay:
         color_bits_inverted: bool = False,
         highlight_color: int = 0x000000,
         refresh_display_command: int,
-        refresh_time: float = 40,
+        refresh_time: float = 40.0,
         busy_pin: Optional[microcontroller.Pin] = None,
         busy_state: bool = True,
-        seconds_per_frame: float = 180,
+        seconds_per_frame: float = 180.0,
         always_toggle_chip_select: bool = False,
         grayscale: bool = False,
     ):
