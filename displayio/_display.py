@@ -298,14 +298,10 @@ class Display:
         else:
             width, height = self._width, self._height
 
-        if rectangle.x1 < 0:
-            rectangle.x1 = 0
-        if rectangle.y1 < 0:
-            rectangle.y1 = 0
-        if rectangle.x2 > width:
-            rectangle.x2 = width
-        if rectangle.y2 > height:
-            rectangle.y2 = height
+        rectangle.x1 = max(rectangle.x1, 0)
+        rectangle.y1 = max(rectangle.y1, 0)
+        rectangle.x2 = min(rectangle.x2, width)
+        rectangle.y2 = min(rectangle.y2, height)
 
         return rectangle
 
