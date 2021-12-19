@@ -48,7 +48,7 @@ class OnDiskBitmap:
     @property
     def pixel_shader(self) -> Union[ColorConverter, Palette]:
         """Height of the bitmap. (read only)"""
-        return self._image.height
+        return self._image.getpalette()
 
     def __getitem__(self, index: Union[tuple, list, int]) -> int:
         """
