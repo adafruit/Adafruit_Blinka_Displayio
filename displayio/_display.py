@@ -183,7 +183,7 @@ class Display:
         self._bus._begin_transaction()
         if self._data_as_commands:
             self._bus._send(
-                DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command] + data)
+                DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command]) + data
             )
         else:
             self._bus._send(
