@@ -23,8 +23,11 @@ from __future__ import annotations
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
+
 class Area:
     # pylint: disable=invalid-name,missing-function-docstring
+    """Area Class to represent an area to be updated. Currently not used."""
+
     def __init__(self, x1: int = 0, y1: int = 0, x2: int = 0, y2: int = 0):
         self.x1 = x1
         self.y1 = y1
