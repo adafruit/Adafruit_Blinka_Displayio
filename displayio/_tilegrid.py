@@ -18,19 +18,16 @@ displayio for Blinka
 """
 
 from typing import Union, Optional, Tuple
-from recordclass import recordclass
 from PIL import Image
 from ._bitmap import Bitmap
 from ._colorconverter import ColorConverter
 from ._ondiskbitmap import OnDiskBitmap
 from ._shape import Shape
 from ._palette import Palette
+from ._structs import RectangleStruct, TransformStruct
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
-Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
-Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
 
 class TileGrid:
@@ -100,9 +97,11 @@ class TileGrid:
         self._pixel_width = width * tile_width
         self._pixel_height = height * tile_height
         self._tiles = (self._width * self._height) * [default_tile]
-        self.in_group = False
-        self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
-        self._current_area = Rectangle(0, 0, self._pixel_width, self._pixel_height)
+        self._in_group = False
+        self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
+        self._current_area = RectangleStruct(
+            0, 0, self._pixel_width, self._pixel_height
+        )
         self._moved = False
 
     def _update_transform(self, absolute_transform):
@@ -295,6 +294,9 @@ class TileGrid:
             and source_y <= image.height
         ):
             buffer.alpha_composite(image, (x, y), source=(source_x, source_y))
+
+    def _finish_refresh(self):
+        pass
 
     @property
     def hidden(self) -> bool:

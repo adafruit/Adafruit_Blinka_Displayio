@@ -37,7 +37,6 @@ setup(
         "Adafruit-Blinka",
         "pillow",
         "numpy",
-        "recordclass",
     ],
     # Choose your license
     license="MIT",

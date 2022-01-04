@@ -19,14 +19,11 @@ displayio for Blinka
 
 from __future__ import annotations
 from typing import Union, Callable
-from recordclass import recordclass
+from ._structs import TransformStruct
 from ._tilegrid import TileGrid
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
-
-Transform = recordclass("Transform", "x y dx dy scale transpose_xy mirror_x mirror_y")
 
 
 class Group:
@@ -52,14 +49,14 @@ class Group:
         self._hidden_group = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
-        self.in_group = False
-        self._absolute_transform = Transform(0, 0, 1, 1, 1, False, False, False)
+        self._in_group = False
+        self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
         self._set_scale(scale)  # Set the scale via the setter
 
     def _update_transform(self, parent_transform):
         """Update the parent transform and child transforms"""
-        self.in_group = parent_transform is not None
-        if self.in_group:
+        self._in_group = parent_transform is not None
+        if self._in_group:
             x = self._group_x
             y = self._group_y
             if parent_transform.transpose_xy:
@@ -76,7 +73,7 @@ class Group:
 
     def _update_child_transforms(self):
         # pylint: disable=protected-access
-        if self.in_group:
+        if self._in_group:
             for layer in self._layers:
                 layer._update_transform(self._absolute_transform)
 
@@ -100,7 +97,7 @@ class Group:
         """Insert a layer into the group."""
         if not isinstance(layer, self._supported_types):
             raise ValueError("Invalid Group Member")
-        if layer.in_group:
+        if layer._in_group:  # pylint: disable=protected-access
             raise ValueError("Layer already in a group.")
         self._layers.insert(index, layer)
         self._layer_update(index)
@@ -155,6 +152,11 @@ class Group:
     def sort(self, key: Callable, reverse: bool) -> None:
         """Sort the members of the group."""
         self._layers.sort(key=key, reverse=reverse)
+
+    def _finish_refresh(self):
+        for layer in self._layers:
+            if isinstance(layer, (Group, TileGrid)):
+                layer._finish_refresh()  # pylint: disable=protected-access
 
     @property
     def hidden(self) -> bool:

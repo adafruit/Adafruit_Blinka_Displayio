@@ -21,30 +21,30 @@ import time
 import struct
 import threading
 from typing import Optional
+from dataclasses import astuple
 import digitalio
 from PIL import Image
 import numpy
 import microcontroller
-from recordclass import recordclass
 import _typing
+from ._displaycore import _DisplayCore
 from ._displaybus import _DisplayBus
 from ._colorconverter import ColorConverter
 from ._group import Group
+from ._structs import RectangleStruct
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
     DISPLAY_COMMAND,
     DISPLAY_DATA,
+    BACKLIGHT_IN_OUT,
+    BACKLIGHT_PWM,
 )
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 displays = []
-
-BACKLIGHT_IN_OUT = 1
-BACKLIGHT_PWM = 2
 
 
 class Display:
@@ -72,6 +72,7 @@ class Display:
         pixels_in_byte_share_row: bool = True,
         bytes_per_cell: int = 1,
         reverse_pixels_in_byte: bool = False,
+        reverse_bytes_in_word: bool = True,
         set_column_command: int = 0x2A,
         set_row_command: int = 0x2B,
         write_ram_command: int = 0x2C,
@@ -117,7 +118,28 @@ class Display:
         The initialization sequence should always leave the display memory access inline with
         the scan of the display to minimize tearing artifacts.
         """
-        self._bus = display_bus
+        ram_width = 0x100
+        ram_height = 0x100
+        if single_byte_bounds:
+            ram_width = 0xFF
+            ram_height = 0xFF
+        self._core = _DisplayCore(
+            bus=display_bus,
+            width=width,
+            height=height,
+            ram_width=ram_width,
+            ram_height=ram_height,
+            colstart=colstart,
+            rowstart=rowstart,
+            rotation=rotation,
+            color_depth=color_depth,
+            grayscale=grayscale,
+            pixels_in_byte_share_row=pixels_in_byte_share_row,
+            bytes_per_cell=bytes_per_cell,
+            reverse_pixels_in_byte=reverse_pixels_in_byte,
+            reverse_bytes_in_word=reverse_bytes_in_word,
+        )
+
         self._set_column_command = set_column_command
         self._set_row_command = set_row_command
         self._write_ram_command = write_ram_command
@@ -168,7 +190,21 @@ class Display:
             delay = (data_size & 0x80) > 0
             data_size &= ~0x80
 
-            self._send(command, init_sequence[i + 2 : i + 2 + data_size])
+            if self._data_as_commands:
+                self._core.send(
+                    DISPLAY_COMMAND,
+                    CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                    bytes([command]) + init_sequence[i + 2 : i + 2 + data_size],
+                )
+            else:
+                self._core.send(
+                    DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
+                )
+                self._core.send(
+                    DISPLAY_DATA,
+                    CHIP_SELECT_UNTOUCHED,
+                    init_sequence[i + 2 : i + 2 + data_size],
+                )
             delay_time_ms = 10
             if delay:
                 data_size += 1
@@ -179,38 +215,32 @@ class Display:
             i += 2 + data_size
 
     def _send(self, command, data):
-        # pylint: disable=protected-access
-        self._bus._begin_transaction()
+        self._core.begin_transaction()
         if self._data_as_commands:
-            self._bus._send(
+            self._core.send(
                 DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command]) + data
             )
         else:
-            self._bus._send(
+            self._core.send(
                 DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
             )
-            self._bus._send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
-        self._bus._end_transaction()
+            self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
+        self._core.end_transaction()
 
     def _send_pixels(self, data):
-        # pylint: disable=protected-access
         if not self._data_as_commands:
-            self._bus._send(
+            self._core.send(
                 DISPLAY_COMMAND,
                 CHIP_SELECT_TOGGLE_EVERY_BYTE,
                 bytes([self._write_ram_command]),
             )
-        self._bus._send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
-
-    def _release(self):
-        self._bus._release()  # pylint: disable=protected-access
-        self._bus = None
+        self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
 
     def show(self, group: Group) -> None:
         """Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
         """
-        self._current_group = group
+        self._core.show(group)
 
     def refresh(
         self,
@@ -218,7 +248,7 @@ class Display:
         target_frames_per_second: Optional[int] = None,
         minimum_frames_per_second: int = 0,
     ) -> bool:
-        # pylint: disable=unused-argument
+        # pylint: disable=unused-argument, protected-access
         """When auto refresh is off, waits for the target frame rate and then refreshes the
         display, returning True. If the call has taken too long since the last refresh call
         for the given target frame rate, then the refresh returns False immediately without
@@ -230,22 +260,25 @@ class Display:
         When auto refresh is on, updates the display immediately. (The display will also
         update without calls to this.)
         """
-        self._subrectangles = []
+        if not self._core.start_refresh():
+            return False
 
         # Go through groups and and add each to buffer
-        if self._current_group is not None:
-            buffer = Image.new("RGBA", (self._width, self._height))
+        if self._core._current_group is not None:
+            buffer = Image.new("RGBA", (self._core._width, self._core._height))
             # Recursively have everything draw to the image
-            self._current_group._fill_area(buffer)  # pylint: disable=protected-access
+            self._core._current_group._fill_area(
+                buffer
+            )  # pylint: disable=protected-access
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
 
-        if self._current_group is not None:
-            # Eventually calculate dirty rectangles here
-            self._subrectangles.append(Rectangle(0, 0, self._width, self._height))
+        self._subrectangles = self._core.get_refresh_areas()
 
         for area in self._subrectangles:
             self._refresh_display_area(area)
+
+        self._core.finish_refresh()
 
         return True
 
@@ -255,12 +288,11 @@ class Display:
 
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
-
-        img = self._buffer.convert("RGB").crop(rectangle)
+        img = self._buffer.convert("RGB").crop(astuple(rectangle))
         img = img.rotate(self._rotation, expand=True)
 
         display_rectangle = self._apply_rotation(rectangle)
-        img = img.crop(self._clip(display_rectangle))
+        img = img.crop(astuple(self._clip(display_rectangle)))
 
         data = numpy.array(img).astype("uint16")
         color = (
@@ -288,9 +320,9 @@ class Display:
             ),
         )
 
-        self._bus._begin_transaction()  # pylint: disable=protected-access
+        self._core.begin_transaction()
         self._send_pixels(pixels)
-        self._bus._end_transaction()  # pylint: disable=protected-access
+        self._core.end_transaction()
 
     def _clip(self, rectangle):
         if self._rotation in (90, 270):
@@ -308,21 +340,21 @@ class Display:
     def _apply_rotation(self, rectangle):
         """Adjust the rectangle coordinates based on rotation"""
         if self._rotation == 90:
-            return Rectangle(
+            return RectangleStruct(
                 self._height - rectangle.y2,
                 rectangle.x1,
                 self._height - rectangle.y1,
                 rectangle.x2,
             )
         if self._rotation == 180:
-            return Rectangle(
+            return RectangleStruct(
                 self._width - rectangle.x2,
                 self._height - rectangle.y2,
                 self._width - rectangle.x1,
                 self._height - rectangle.y1,
             )
         if self._rotation == 270:
-            return Rectangle(
+            return RectangleStruct(
                 rectangle.y1,
                 self._width - rectangle.x2,
                 rectangle.y2,
@@ -400,25 +432,23 @@ class Display:
     @property
     def width(self) -> int:
         """Display Width"""
-        return self._width
+        return self._core.get_width()
 
     @property
     def height(self) -> int:
         """Display Height"""
-        return self._height
+        return self._core.get_height()
 
     @property
     def rotation(self) -> int:
         """The rotation of the display as an int in degrees."""
-        return self._rotation
+        return self._core.get_rotation()
 
     @rotation.setter
     def rotation(self, value: int):
-        if value not in (0, 90, 180, 270):
-            raise ValueError("Rotation must be 0/90/180/270")
-        self._rotation = value
+        self._core.set_rotation(value)
 
     @property
     def bus(self) -> _DisplayBus:
         """Current Display Bus"""
-        return self._bus
+        return self._core.get_bus()

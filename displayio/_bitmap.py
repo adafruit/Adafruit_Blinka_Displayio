@@ -19,13 +19,11 @@ displayio for Blinka
 
 from __future__ import annotations
 from typing import Union, Tuple
-from recordclass import recordclass
 from PIL import Image
+from ._structs import RectangleStruct
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
-Rectangle = recordclass("Rectangle", "x1 y1 x2 y2")
 
 
 class Bitmap:
@@ -61,7 +59,7 @@ class Bitmap:
             raise NotImplementedError("Invalid bits per value")
 
         self._image = Image.new("P", (width, height), 0)
-        self._dirty_area = Rectangle(0, 0, width, height)
+        self._dirty_area = RectangleStruct(0, 0, width, height)
 
     def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
         """
@@ -117,7 +115,7 @@ class Bitmap:
     def fill(self, value: int) -> None:
         """Fills the bitmap with the supplied palette index value."""
         self._image = Image.new("P", (self._bmp_width, self._bmp_height), value)
-        self._dirty_area = Rectangle(0, 0, self._bmp_width, self._bmp_height)
+        self._dirty_area = RectangleStruct(0, 0, self._bmp_width, self._bmp_height)
 
     def blit(
         self,
