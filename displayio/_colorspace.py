@@ -26,8 +26,8 @@ class Colorspace:
     """The colorspace for a ColorConverter to operate in."""
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, colorspace):
-        self._type = colorspace
+    def __init__(self, colorspace_type):
+        self._colorspace_type = colorspace_type
 
 
 Colorspace.RGB888 = Colorspace("RGB888")
