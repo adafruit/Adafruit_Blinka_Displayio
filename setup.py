@@ -34,7 +34,8 @@ setup(
     author="Adafruit Industries",
     author_email="circuitpython@adafruit.com",
     install_requires=[
-        "Adafruit-Blinka",
+        "Adafruit-Blinka>=7.0.0",
+        "adafruit-circuitpython-typing",
         "pillow",
         "numpy",
     ],
@@ -54,6 +55,6 @@ setup(
     keywords="adafruit blinka circuitpython micropython displayio lcd tft display pitft",
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    py_modules=["fontio", "terminalio", "paralleldisplay", "_typing"],
+    py_modules=["fontio", "terminalio", "paralleldisplay"],
     packages=["displayio"],
 )
