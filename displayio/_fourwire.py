@@ -112,7 +112,7 @@ class FourWire:
             else CHIP_SELECT_UNTOUCHED
         )
         self._begin_transaction()
-        self._send(DISPLAY_COMMAND, chip_select, command)
+        self._send(DISPLAY_COMMAND, chip_select, bytes([command]))
         self._send(DISPLAY_DATA, chip_select, data)
         self._end_transaction()
 
