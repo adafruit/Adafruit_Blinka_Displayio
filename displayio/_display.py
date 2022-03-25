@@ -289,7 +289,7 @@ class Display:
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
         img = self._buffer.convert("RGB").crop(astuple(rectangle))
-        img = img.rotate(self._rotation, expand=True)
+        img = img.rotate(360 - self._rotation, expand=True)
 
         display_rectangle = self._apply_rotation(rectangle)
         img = img.crop(astuple(self._clip(display_rectangle)))
