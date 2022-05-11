@@ -14,8 +14,19 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
+import sys
 
 here = path.abspath(path.dirname(__file__))
+
+requirements = [
+    "Adafruit-Blinka>=7.0.0",
+    "adafruit-circuitpython-typing",
+    "pillow",
+    "numpy",
+]
+
+if sys.version_info > (3, 9):
+    requirements.append("pillow>=6.0.0")
 
 # Get the long description from the README file
 with open(path.join(here, "README.rst"), encoding="utf-8") as f:
@@ -33,12 +44,7 @@ setup(
     # Author details
     author="Adafruit Industries",
     author_email="circuitpython@adafruit.com",
-    install_requires=[
-        "Adafruit-Blinka>=7.0.0",
-        "adafruit-circuitpython-typing",
-        "pillow",
-        "numpy",
-    ],
+    install_requires=requirements,
     # Choose your license
     license="MIT",
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
