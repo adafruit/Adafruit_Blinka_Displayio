@@ -37,6 +37,7 @@ setup(
         "Adafruit-Blinka>=7.0.0",
         "adafruit-circuitpython-typing",
         "pillow",
+        "pillow>=6.0.0; python_version>=3.10"
         "numpy",
     ],
     # Choose your license
