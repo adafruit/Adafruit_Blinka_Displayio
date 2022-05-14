@@ -408,3 +408,39 @@ class TileGrid:
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
         self._tiles[index] = value
+
+    @property
+    def width(self):
+        """Width in tiles"""
+        return self._width
+
+    @width.setter
+    def width(self, new_width):
+        self._width = new_width
+
+    @property
+    def height(self):
+        """Height in tiles"""
+        return self._height
+
+    @height.setter
+    def height(self, new_height):
+        self._height = new_height
+
+    @property
+    def tile_width(self):
+        """Width of each tile in pixels"""
+        return self._tile_width
+
+    @tile_width.setter
+    def tile_width(self, new_tile_width):
+        self._tile_width = new_tile_width
+
+    @property
+    def tile_height(self):
+        """Height of each tile in pixels"""
+        return self._tile_height
+
+    @tile_height.setter
+    def tile_height(self, new_tile_height):
+        self._tile_height = new_tile_height
