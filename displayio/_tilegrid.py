@@ -410,21 +410,21 @@ class TileGrid:
         self._tiles[index] = value
 
     @property
-    def width(self):
+    def width(self) -> int:
         """Width in tiles"""
         return self._width
 
     @property
-    def height(self):
+    def height(self) -> int:
         """Height in tiles"""
         return self._height
 
     @property
-    def tile_width(self):
+    def tile_width(self) -> int:
         """Width of each tile in pixels"""
         return self._tile_width
 
     @property
-    def tile_height(self):
+    def tile_height(self) -> int:
         """Height of each tile in pixels"""
         return self._tile_height
