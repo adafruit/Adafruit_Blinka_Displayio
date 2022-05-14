@@ -381,6 +381,42 @@ class TileGrid:
         """The pixel shader of the tilegrid."""
         return self._pixel_shader
 
+    @pixel_shader.setter
+    def pixel_shader(self, new_pixel_shader: Union[ColorConverter, Palette]) -> None:
+        if not isinstance(new_pixel_shader, ColorConverter) and not isinstance(
+            new_pixel_shader, Palette
+        ):
+            raise TypeError(
+                "Unsupported Type: new_pixel_shader must be ColorConverter or Palette"
+            )
+
+        self._pixel_shader = new_pixel_shader
+
+    @property
+    def bitmap(self) -> Union[Bitmap, OnDiskBitmap, Shape]:
+        """The Bitmap, OnDiskBitmap, or Shape that is assigned to this TileGrid"""
+        return self._bitmap
+
+    @bitmap.setter
+    def bitmap(self, new_bitmap: Union[Bitmap, OnDiskBitmap, Shape]) -> None:
+
+        if (
+            not isinstance(new_bitmap, Bitmap)
+            and not isinstance(new_bitmap, OnDiskBitmap)
+            and not isinstance(new_bitmap, Shape)
+        ):
+            raise TypeError(
+                "Unsupported Type: new_bitmap must be Bitmap, OnDiskBitmap, or Shape"
+            )
+
+        if (
+            new_bitmap.width != self.bitmap.width
+            or new_bitmap.height != self.bitmap.height
+        ):
+            raise ValueError("New bitmap must be same size as old bitmap")
+
+        self._bitmap = new_bitmap
+
     def _extract_and_check_index(self, index):
         if isinstance(index, (tuple, list)):
             x = index[0]
