@@ -17,12 +17,34 @@ fontio for Blinka
 
 """
 
+from typing import Union, Tuple, Optional
 from PIL import ImageFont
 from displayio import Bitmap
+try:
+    from typing import Protocol
+except ImportError:
+    from typing_extensions import Protocol
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
+
+class FontProtocol(Protocol):
+"""A protocol shared by `BuiltinFont` and classes in ``adafruit_bitmap_font``"""
+
+    def get_bounding_box(self) -> Union[Tuple[int, int], Tuple[int, int, int, int]]:
+        """Retrieve the maximum bounding box of any glyph in the font.
+
+        The four element version is ``(width, height, x_offset, y_offset)``.
+        The two element version is ``(width, height)``, in which
+        ``x_offset`` and ``y_offset`` are assumed to be zero.
+        """
+
+    def get_glyph(self, codepoint: int) -> Optional["Glyph"]:
+        """Retrieve the Glyph for a given code point
+
+        If the code point is not present in the font, `None` is returned.
+        """
 
 class BuiltinFont:
     """Simulate a font built into CircuitPython"""
