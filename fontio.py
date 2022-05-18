@@ -20,6 +20,7 @@ fontio for Blinka
 from typing import Union, Tuple, Optional
 from PIL import ImageFont
 from displayio import Bitmap
+
 try:
     from typing import Protocol
 except ImportError:
