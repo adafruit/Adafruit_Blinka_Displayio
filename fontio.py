@@ -47,6 +47,7 @@ class FontProtocol(Protocol):
         If the code point is not present in the font, `None` is returned.
         """
 
+
 class BuiltinFont:
     """Simulate a font built into CircuitPython"""
 
