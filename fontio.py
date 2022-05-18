@@ -30,7 +30,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class FontProtocol(Protocol):
-"""A protocol shared by `BuiltinFont` and classes in ``adafruit_bitmap_font``"""
+    """A protocol shared by `BuiltinFont` and classes in ``adafruit_bitmap_font``"""
 
     def get_bounding_box(self) -> Union[Tuple[int, int], Tuple[int, int, int, int]]:
         """Retrieve the maximum bounding box of any glyph in the font.
