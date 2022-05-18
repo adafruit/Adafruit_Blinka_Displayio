@@ -23,7 +23,7 @@ displayio for Blinka
 import time
 import busio
 import digitalio
-import _typing
+import circuitpython_typing
 from ._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
 
 __version__ = "0.0.0-auto.0"
@@ -76,7 +76,7 @@ class I2CDisplay:
         while not self._i2c.try_lock():
             pass
 
-    def send(self, command: int, data: _typing.ReadableBuffer) -> None:
+    def send(self, command: int, data: circuitpython_typing.ReadableBuffer) -> None:
         """
         Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
@@ -86,7 +86,12 @@ class I2CDisplay:
         self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + data))
         self._end_transaction()
 
-    def _send(self, data_type: int, chip_select: int, data: _typing.ReadableBuffer):
+    def _send(
+        self,
+        data_type: int,
+        chip_select: int,
+        data: circuitpython_typing.ReadableBuffer,
+    ):
         # pylint: disable=unused-argument
         if data_type == DISPLAY_COMMAND:
             n = len(data)

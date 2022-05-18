@@ -22,7 +22,7 @@ from typing import Optional
 import digitalio
 import busio
 import microcontroller
-import _typing
+import circuitpython_typing
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
@@ -93,7 +93,11 @@ class FourWire:
             time.sleep(0.001)
 
     def send(
-        self, command, data: _typing.ReadableBuffer, *, toggle_every_byte: bool = False
+        self,
+        command,
+        data: circuitpython_typing.ReadableBuffer,
+        *,
+        toggle_every_byte: bool = False,
     ) -> None:
         """
         Sends the given command value followed by the full set of data. Display state,
@@ -108,11 +112,16 @@ class FourWire:
             else CHIP_SELECT_UNTOUCHED
         )
         self._begin_transaction()
-        self._send(DISPLAY_COMMAND, chip_select, command)
+        self._send(DISPLAY_COMMAND, chip_select, bytes([command]))
         self._send(DISPLAY_DATA, chip_select, data)
         self._end_transaction()
 
-    def _send(self, data_type: int, chip_select: int, data: _typing.ReadableBuffer):
+    def _send(
+        self,
+        data_type: int,
+        chip_select: int,
+        data: circuitpython_typing.ReadableBuffer,
+    ):
         self._dc.value = data_type == DISPLAY_DATA
         if chip_select == CHIP_SELECT_TOGGLE_EVERY_BYTE:
             for byte in data:

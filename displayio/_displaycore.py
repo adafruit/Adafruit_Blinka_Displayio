@@ -23,7 +23,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 
 from typing import Union
-import _typing
+import circuitpython_typing
 from paralleldisplay import ParallelBus
 from ._fourwire import FourWire
 from ._group import Group
@@ -227,7 +227,10 @@ class _DisplayCore:
             self._current_group._in_group = False
 
     def fill_area(
-        self, area: Area, mask: _typing.WriteableBuffer, buffer: _typing.WriteableBuffer
+        self,
+        area: Area,
+        mask: circuitpython_typing.WriteableBuffer,
+        buffer: circuitpython_typing.WriteableBuffer,
     ) -> bool:
         # pylint: disable=protected-access
         """Call the current group's fill area function"""
@@ -261,7 +264,10 @@ class _DisplayCore:
         return True
 
     def send(
-        self, data_type: int, chip_select: int, data: _typing.ReadableBuffer
+        self,
+        data_type: int,
+        chip_select: int,
+        data: circuitpython_typing.ReadableBuffer,
     ) -> None:
         """
         Send the data to the current bus

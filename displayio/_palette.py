@@ -18,7 +18,7 @@ displayio for Blinka
 """
 
 from typing import Optional, Union, Tuple
-import _typing
+import circuitpython_typing
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -73,7 +73,7 @@ class Palette:
     def __setitem__(
         self,
         index: int,
-        value: Union[int, _typing.ReadableBuffer, Tuple[int, int, int]],
+        value: Union[int, circuitpython_typing.ReadableBuffer, Tuple[int, int, int]],
     ) -> None:
         """Sets the pixel color at the given index. The index should be
         an integer in the range 0 to color_count-1.

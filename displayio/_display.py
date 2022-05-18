@@ -26,7 +26,7 @@ import digitalio
 from PIL import Image
 import numpy
 import microcontroller
-import _typing
+import circuitpython_typing
 from ._displaycore import _DisplayCore
 from ._displaybus import _DisplayBus
 from ._colorconverter import ColorConverter
@@ -60,7 +60,7 @@ class Display:
     def __init__(
         self,
         display_bus: _DisplayBus,
-        init_sequence: _typing.ReadableBuffer,
+        init_sequence: circuitpython_typing.ReadableBuffer,
         *,
         width: int,
         height: int,
@@ -289,7 +289,7 @@ class Display:
     def _refresh_display_area(self, rectangle):
         """Loop through dirty rectangles and redraw that area."""
         img = self._buffer.convert("RGB").crop(astuple(rectangle))
-        img = img.rotate(self._rotation, expand=True)
+        img = img.rotate(360 - self._rotation, expand=True)
 
         display_rectangle = self._apply_rotation(rectangle)
         img = img.crop(astuple(self._clip(display_rectangle)))
@@ -367,8 +367,8 @@ class Display:
         return struct.pack(self._bounds_encoding, x, y)  # pylint: disable=no-member
 
     def fill_row(
-        self, y: int, buffer: _typing.WriteableBuffer
-    ) -> _typing.WriteableBuffer:
+        self, y: int, buffer: circuitpython_typing.WriteableBuffer
+    ) -> circuitpython_typing.WriteableBuffer:
         """Extract the pixels from a single row"""
         for x in range(0, self._width):
             _rgb_565 = self._colorconverter.convert(self._buffer.getpixel((x, y)))
