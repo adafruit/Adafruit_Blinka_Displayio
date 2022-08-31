@@ -20,7 +20,7 @@ Area for Blinka Displayio
 
 from __future__ import annotations
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 

@@ -19,7 +19,7 @@ Struct Data Classes for Blinka Displayio
 
 from dataclasses import dataclass
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 

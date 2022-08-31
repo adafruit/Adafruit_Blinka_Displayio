@@ -26,7 +26,7 @@ import digitalio
 import circuitpython_typing
 from ._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 

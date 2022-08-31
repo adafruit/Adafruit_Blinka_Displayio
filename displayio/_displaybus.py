@@ -22,7 +22,7 @@ import paralleldisplay
 from ._fourwire import FourWire
 from ._i2cdisplay import I2CDisplay
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 _DisplayBus = Union[FourWire, I2CDisplay, paralleldisplay.ParallelBus]
