@@ -20,7 +20,7 @@ displayio for Blinka
 
 from ._bitmap import Bitmap
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 

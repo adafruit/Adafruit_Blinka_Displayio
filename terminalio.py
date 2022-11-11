@@ -20,7 +20,7 @@ terminalio for Blinka
 import sys  # pylint: disable=unused-import
 import fontio
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 FONT = fontio.BuiltinFont()

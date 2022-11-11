@@ -22,7 +22,7 @@ from PIL import Image
 from ._colorconverter import ColorConverter
 from ._palette import Palette
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 

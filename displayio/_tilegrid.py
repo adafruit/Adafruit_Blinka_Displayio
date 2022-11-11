@@ -26,7 +26,7 @@ from ._shape import Shape
 from ._palette import Palette
 from ._structs import RectangleStruct, TransformStruct
 
-__version__ = "0.0.0-auto.0"
+__version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
