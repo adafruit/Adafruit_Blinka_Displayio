@@ -272,6 +272,11 @@ class Display:
             )  # pylint: disable=protected-access
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
+        else:
+            # show nothing
+            print("show nothing")
+            buffer = Image.new("RGBA", (self._core._width, self._core._height))
+            self._buffer.paste(buffer)
 
         self._subrectangles = self._core.get_refresh_areas()
 
@@ -452,3 +457,11 @@ class Display:
     def bus(self) -> _DisplayBus:
         """Current Display Bus"""
         return self._core.get_bus()
+
+    @property
+    def root_group(self) -> Group:
+        return self._current_group
+
+    @root_group.setter
+    def root_group(self, new_group):
+        self._current_group = new_group
