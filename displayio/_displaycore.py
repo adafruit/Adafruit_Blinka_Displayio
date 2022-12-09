@@ -151,44 +151,9 @@ class _DisplayCore:
         if self._current_group is not None:
             self._current_group._update_transform(self._transform)
 
-    def show(self, root_group: Group) -> bool:
-        # pylint: disable=protected-access
-
-        """
-        Switches to displaying the given group of layers. When group is `None`, the
-        default CircuitPython terminal will be shown.
-
-        :param Optional[displayio.Group] root_group: The group to show.
-        """
-
-        """
-        # TODO: Implement Supervisor
-        if root_group is None:
-            circuitpython_splash = _Supervisor().circuitpython_splash
-            if not circuitpython_splash._in_group:
-                root_group = circuitpython_splash
-            elif self._current_group == circuitpython_splash:
-                return True
-        """
-
-        if root_group == self._current_group:
-            return True
-
-        if root_group is not None and root_group._in_group:
-            return False
-
-        if self._current_group is not None:
-            self._current_group._in_group = False
-
-        if root_group is not None:
-            root_group._update_transform(self._transform)
-            root_group._in_group = True
-
-        self._current_group = root_group
-        self._full_refresh = True
-
-        print(f"end of show: {root_group}")
-        return True
+    def get_root_group(self):
+        """The root group on the display."""
+        return self._current_group
 
     def set_root_group(self, root_group: Group) -> bool:
         # pylint: disable=protected-access
