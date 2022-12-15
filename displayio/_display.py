@@ -23,7 +23,7 @@ import threading
 from typing import Optional
 from dataclasses import astuple
 import digitalio
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy
 import microcontroller
 import circuitpython_typing
@@ -158,7 +158,7 @@ class Display:
         self._buffer = Image.new("RGB", (width, height))
         self._subrectangles = []
         self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
-        self._current_group = None
+
         displays.append(self)
         self._refresh_thread = None
         if self._auto_refresh:
@@ -240,7 +240,7 @@ class Display:
         """Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
         """
-        self._core.show(group)
+        self._core.set_root_group(group)
 
     def refresh(
         self,
@@ -263,6 +263,7 @@ class Display:
         if not self._core.start_refresh():
             return False
 
+        force_full_refresh = False
         # Go through groups and and add each to buffer
         if self._core._current_group is not None:
             buffer = Image.new("RGBA", (self._core._width, self._core._height))
@@ -274,14 +275,19 @@ class Display:
             self._buffer.paste(buffer)
         else:
             # show nothing
-            print("show nothing")
             buffer = Image.new("RGBA", (self._core._width, self._core._height))
+            draw = ImageDraw.Draw(buffer)
+            draw.rectangle([(0, 0), buffer.size], fill=(0, 0, 0))
             self._buffer.paste(buffer)
+            force_full_refresh = True
 
-        self._subrectangles = self._core.get_refresh_areas()
-
-        for area in self._subrectangles:
-            self._refresh_display_area(area)
+        if force_full_refresh:
+            full_rect = RectangleStruct(0, 0, self._width, self._height)
+            self._refresh_display_area(full_rect)
+        else:
+            self._subrectangles = self._core.get_refresh_areas()
+            for area in self._subrectangles:
+                self._refresh_display_area(area)
 
         self._core.finish_refresh()
 
@@ -460,8 +466,12 @@ class Display:
 
     @property
     def root_group(self) -> Group:
-        return self._current_group
+        """The root group on the display."""
+        return self._core.get_root_group()
 
     @root_group.setter
     def root_group(self, new_group):
-        self._current_group = new_group
+        """Switches to displaying the given group of layers. When group is None,
+        a blank screen will be shown.
+        """
+        self._core.set_root_group(new_group)
