@@ -394,6 +394,7 @@ class Display:
         elif not value and self._refresh_thread.is_alive():
             # Stop the thread
             self._refresh_thread.join()
+            self._refresh_thread = None
 
     @property
     def brightness(self) -> float:
