@@ -265,11 +265,11 @@ class TileGrid:
                     ),
                     resample=Image.NEAREST,
                 )
-            if absolute_transform.mirror_x:
+            if absolute_transform.mirror_x != self._flip_x:
                 image = image.transpose(Image.FLIP_LEFT_RIGHT)
-            if absolute_transform.mirror_y:
+            if absolute_transform.mirror_y != self._flip_y:
                 image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            if absolute_transform.transpose_xy:
+            if absolute_transform.transpose_xy != self._transpose_xy:
                 image = image.transpose(Image.TRANSPOSE)
             x *= absolute_transform.dx
             y *= absolute_transform.dy
