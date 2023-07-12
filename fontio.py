@@ -75,7 +75,7 @@ class BuiltinFont:
         """Returns the maximum bounds of all glyphs in the font in
         a tuple of two values: width, height.
         """
-        return self._font.getsize("M")
+        return self._font.getbbox("M")[2:4]
 
     def get_glyph(self, codepoint):
         """Returns a `fontio.Glyph` for the given codepoint or None if no glyph is available."""
@@ -84,7 +84,7 @@ class BuiltinFont:
         else:
             return None
 
-        bounding_box = self._font.getsize(chr(codepoint))
+        bounding_box = self._font.getbbox(chr(codepoint))[2:4]
         width, height = bounding_box
         return Glyph(
             bitmap=self._bitmap,
