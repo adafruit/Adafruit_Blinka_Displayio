@@ -26,7 +26,7 @@ requirements = [
 ]
 
 if sys.version_info > (3, 9):
-    requirements.append("pillow>=6.0.0")
+    requirements.append("pillow>=9.2.0")
 
 # Get the long description from the README file
 with open(path.join(here, "README.rst"), encoding="utf-8") as f:

@@ -399,7 +399,6 @@ class TileGrid:
 
     @bitmap.setter
     def bitmap(self, new_bitmap: Union[Bitmap, OnDiskBitmap, Shape]) -> None:
-
         if (
             not isinstance(new_bitmap, Bitmap)
             and not isinstance(new_bitmap, OnDiskBitmap)

@@ -154,7 +154,6 @@ class Bitmap:
                 if (self.width > x_placement >= 0) and (
                     self.height > y_placement >= 0
                 ):  # ensure placement is within target bitmap
-
                     # get the palette index from the source bitmap
                     this_pixel_color = source_bitmap[
                         y1
