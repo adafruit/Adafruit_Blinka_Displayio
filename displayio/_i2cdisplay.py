@@ -89,10 +89,9 @@ class I2CDisplay:
     def _send(
         self,
         data_type: int,
-        chip_select: int,
+        _chip_select: int,  # Chip select behavior
         data: circuitpython_typing.ReadableBuffer,
     ):
-        # pylint: disable=unused-argument
         if data_type == DISPLAY_COMMAND:
             n = len(data)
             if n > 0:
@@ -101,12 +100,12 @@ class I2CDisplay:
                     command_bytes[2 * i] = 0x80
                     command_bytes[2 * i + 1] = data[i]
 
-                self._i2c.writeto(self._dev_addr, buffer=command_bytes, stop=True)
+                self._i2c.writeto(self._dev_addr, buffer=command_bytes)
         else:
             data_bytes = bytearray(len(data) + 1)
             data_bytes[0] = 0x40
             data_bytes[1:] = data
-            self._i2c.writeto(self._dev_addr, buffer=data_bytes, stop=True)
+            self._i2c.writeto(self._dev_addr, buffer=data_bytes)
 
     def _end_transaction(self) -> None:
         """Release the bus after sending data."""

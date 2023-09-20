@@ -49,7 +49,7 @@ class TransformStruct:
 
 @dataclass
 class ColorspaceStruct:
-    # pylint: disable=invalid-name
+    # pylint: disable=invalid-name, too-many-instance-attributes
     """Colorspace Struct Dataclass"""
     depth: int
     bytes_per_cell: int = 0
@@ -58,6 +58,7 @@ class ColorspaceStruct:
     grayscale_bit: int = 0
     grayscale: bool = False
     tricolor: bool = False
+    sevencolor: bool = False  # Acep e-ink screens.
     pixels_in_byte_share_row: bool = False
     reverse_pixels_in_byte: bool = False
     reverse_bytes_in_word: bool = False
