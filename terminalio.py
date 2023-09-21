@@ -17,7 +17,6 @@ terminalio for Blinka
 
 """
 
-import sys  # pylint: disable=unused-import
 import fontio
 
 __version__ = "0.0.0+auto.0"
@@ -26,5 +25,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 FONT = fontio.BuiltinFont()
 
 # TODO: Tap into stdout to get the REPL
+# Look at how Adafruit_Python_Shell's run_command works as an option
+# Additionally, adding supervisor to Blinka may be helpful to keep track of REPL output
 # sys.stdout = open('out.dat', 'w')
 # sys.stdout.close()

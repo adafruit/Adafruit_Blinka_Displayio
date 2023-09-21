@@ -53,6 +53,14 @@ class I2CDisplay:
         self._i2c = i2c_bus
         self._dev_addr = device_address
 
+    def __new__(cls, *args, **kwargs):
+        from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
+            allocate_display_bus,
+        )
+
+        allocate_display_bus(cls)
+        return super().__new__(cls)
+
     def _release(self):
         self.reset()
         self._i2c.deinit()
