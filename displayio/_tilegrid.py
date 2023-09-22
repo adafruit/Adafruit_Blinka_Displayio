@@ -19,6 +19,7 @@ displayio for Blinka
 
 import struct
 from typing import Union, Optional, Tuple
+import circuitpython_typing
 from ._bitmap import Bitmap
 from ._colorconverter import ColorConverter
 from ._ondiskbitmap import OnDiskBitmap
@@ -211,7 +212,11 @@ class TileGrid:
         image.putalpha(alpha.convert("L"))
 
     def _fill_area(
-        self, colorspace: Colorspace, area: Area, mask: bytearray, buffer: bytearray
+        self,
+        colorspace: Colorspace,
+        area: Area,
+        mask: circuitpython_typing.WriteableBuffer,
+        buffer: circuitpython_typing.WriteableBuffer,
     ) -> bool:
         """Draw onto the image"""
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -400,22 +405,24 @@ class TileGrid:
             areas.append(self._previous_area)
             return
 
-        tail = areas[-1]
+        tail = areas[-1] if areas else None
         # If we have an in-memory bitmap, then check it for modifications
         if isinstance(self._bitmap, Bitmap):
             self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
-            if tail != areas[-1]:
+            refresh_area = areas[-1] if areas else None
+            if tail != refresh_area:
                 # Special case a TileGrid that shows a full bitmap and use its
                 # dirty area. Copy it to ours so we can transform it.
                 if self._tiles_in_bitmap == 1:
-                    areas[-1].copy_into(self._dirty_area)
+                    refresh_area.copy_into(self._dirty_area)
                     self._partial_change = True
                 else:
                     self._full_change = True
         elif isinstance(self._bitmap, Shape):
             self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
-            if areas[-1] != tail:
-                areas[-1].copy_into(self._dirty_area)
+            refresh_area = areas[-1] if areas else None
+            if refresh_area != tail:
+                refresh_area.copy_into(self._dirty_area)
                 self._partial_change = True
 
         self._full_change = self._full_change or (

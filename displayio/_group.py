@@ -19,6 +19,7 @@ displayio for Blinka
 
 from __future__ import annotations
 from typing import Union, Callable
+import circuitpython_typing
 from ._structs import TransformStruct
 from ._tilegrid import TileGrid
 from ._colorspace import Colorspace
@@ -145,7 +146,11 @@ class Group:
         del self._layers[index]
 
     def _fill_area(
-        self, colorspace: Colorspace, area: Area, mask: int, buffer: bytearray
+        self,
+        colorspace: Colorspace,
+        area: Area,
+        mask: circuitpython_typing.WriteableBuffer,
+        buffer: circuitpython_typing.WriteableBuffer,
     ) -> bool:
         if self._hidden_group:
             return False

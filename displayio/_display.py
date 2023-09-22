@@ -19,6 +19,7 @@ displayio for Blinka
 
 import time
 import struct
+from array import array
 from typing import Optional
 import digitalio
 from PIL import Image
@@ -372,9 +373,9 @@ class Display:
             if pixels_per_buffer % pixels_per_word:
                 buffer_size += 1
 
-        buffer = bytearray(buffer_size)
+        buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
         mask_length = (pixels_per_buffer // 32) + 1
-        mask = bytearray(mask_length)
+        mask = array("L", [0] * mask_length)
         remaining_rows = clipped.height()
 
         for subrect_index in range(subrectangles):

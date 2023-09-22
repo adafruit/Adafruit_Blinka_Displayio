@@ -405,7 +405,7 @@ class _DisplayCore:
         """
         Send the data to the current bus
         """
-        print(data_type, chip_select, data)
+        # print(data_type, chip_select, data)
         self._send(data_type, chip_select, data)
 
     def begin_transaction(self) -> None:
