@@ -52,6 +52,7 @@ class Group:
         self._layers = []
         self._supported_types = (TileGrid, Group)
         self._in_group = False
+        self._item_removed = False
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
         self._set_scale(scale)  # Set the scale via the setter
 
@@ -165,6 +166,12 @@ class Group:
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
                 layer._finish_refresh()  # pylint: disable=protected-access
+
+    def _get_refresh_areas(self, areas: list[Area]) -> None:
+        for layer in self._layers:
+            if isinstance(layer, (Group, TileGrid)):
+                if not layer.hidden:
+                    layer._get_refresh_areas(areas)  # pylint: disable=protected-access
 
     @property
     def hidden(self) -> bool:

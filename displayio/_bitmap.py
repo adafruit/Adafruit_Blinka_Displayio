@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Union, Tuple
 from PIL import Image
 from ._structs import RectangleStruct
+from ._area import Area
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -76,6 +77,9 @@ class Bitmap:
 
         if x > self._image.width or y > self._image.height:
             raise ValueError(f"Index {index} is out of range")
+        return self._get_pixel(x, y)
+
+    def _get_pixel(self, x: int, y: int) -> int:
         return self._image.getpixel((x, y))
 
     def __setitem__(self, index: Union[Tuple[int, int], int], value: int) -> None:
@@ -129,8 +133,8 @@ class Bitmap:
         y2: int,
         skip_index: int,
     ) -> None:
-        # pylint: disable=unnecessary-pass, invalid-name
         """Inserts the source_bitmap region defined by rectangular boundaries"""
+        # pylint: disable=invalid-name
         if x2 is None:
             x2 = source_bitmap.width
         if y2 is None:
@@ -172,9 +176,28 @@ class Bitmap:
                     break
 
     def dirty(self, x1: int = 0, y1: int = 0, x2: int = -1, y2: int = -1) -> None:
-        # pylint: disable=unnecessary-pass, invalid-name
         """Inform displayio of bitmap updates done via the buffer protocol."""
-        pass
+        # pylint: disable=invalid-name
+        if x2 == -1:
+            x2 = self._bmp_width
+        if y2 == -1:
+            y2 = self._bmp_height
+        area = Area(x1, y1, x2, y2)
+        area.canon()
+        area.union(self._dirty_area, area)
+        bitmap_area = Area(0, 0, self._bmp_width, self._bmp_height)
+        area.compute_overlap(bitmap_area, self._dirty_area)
+
+    def _finish_refresh(self):
+        if self._read_only:
+            return
+        self._dirty_area.x1 = 0
+        self._dirty_area.x2 = 0
+
+    def _get_refresh_areas(self, areas: list[Area]) -> None:
+        if self._dirty_area.x1 == self._dirty_area.x2 or self._read_only:
+            return
+        areas.append(self._dirty_area)
 
     @property
     def width(self) -> int:

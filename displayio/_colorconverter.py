@@ -45,6 +45,7 @@ class ColorConverter:
         self._cached_colorspace = None
         self._cached_input_pixel = None
         self._cached_output_color = None
+        self._needs_refresh = False
 
     @staticmethod
     def _dither_noise_1(noise):
@@ -84,7 +85,7 @@ class ColorConverter:
         red8 = color_rgb888 >> 16
         grn8 = (color_rgb888 >> 8) & 0xFF
         blu8 = color_rgb888 & 0xFF
-        return (red8 * 19 + grn8 * 182 + blu8 + 54) / 255
+        return (red8 * 19 + grn8 * 182 + blu8 + 54) // 255
 
     @staticmethod
     def _compute_chroma(color_rgb888: int):
@@ -104,11 +105,11 @@ class ColorConverter:
             return 0
         hue = 0
         if max_color == red8:
-            hue = (((grn8 - blu8) * 40) / chroma) % 240
+            hue = (((grn8 - blu8) * 40) // chroma) % 240
         elif max_color == grn8:
-            hue = (((blu8 - red8) + (2 * chroma)) * 40) / chroma
+            hue = (((blu8 - red8) + (2 * chroma)) * 40) // chroma
         elif max_color == blu8:
-            hue = (((red8 - grn8) + (4 * chroma)) * 40) / chroma
+            hue = (((red8 - grn8) + (4 * chroma)) * 40) // chroma
         if hue < 0:
             hue += 240
 

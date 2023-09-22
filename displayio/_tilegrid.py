@@ -73,6 +73,8 @@ class TileGrid:
         if isinstance(self._pixel_shader, ColorConverter):
             self._pixel_shader._rgba = True  # pylint: disable=protected-access
         self._hidden_tilegrid = False
+        self._hidden_by_parent = False
+        self._rendered_hidden = False
         self._x = x
         self._y = y
         self._width_in_tiles = width
@@ -98,16 +100,21 @@ class TileGrid:
             raise ValueError("Default Tile is out of range")
         self._pixel_width = width * tile_width
         self._pixel_height = height * tile_height
-        self._tiles = (self._width_in_tiles * self._height_in_tiles) * [default_tile]
+        self._tiles = bytearray(
+            (self._width_in_tiles * self._height_in_tiles) * [default_tile]
+        )
         self._in_group = False
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
         self._current_area = Area(0, 0, self._pixel_width, self._pixel_height)
+        self._dirty_area = Area(0, 0, 0, 0)
+        self._previous_area = Area(0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF)
         self._moved = False
+        self._full_change = True
+        self._partial_change = True
         self._bitmap_width_in_tiles = bitmap_width // tile_width
         self._tiles_in_bitmap = self._bitmap_width_in_tiles * (
             bitmap_height // tile_height
         )
-        self.inline_tiles = False  # We have plenty of memory
 
     def _update_transform(self, absolute_transform):
         """Update the parent transform and child transforms"""
@@ -121,6 +128,7 @@ class TileGrid:
             width = self._pixel_height
         else:
             width = self._pixel_width
+
         if self._absolute_transform.transpose_xy:
             self._current_area.y1 = (
                 self._absolute_transform.y + self._absolute_transform.dy * self._x
@@ -153,6 +161,7 @@ class TileGrid:
             height = self._pixel_width
         else:
             height = self._pixel_height
+
         if self._absolute_transform.transpose_xy:
             self._current_area.x1 = (
                 self._absolute_transform.x + self._absolute_transform.dx * self._y
@@ -210,7 +219,7 @@ class TileGrid:
         # If no tiles are present we have no impact
         tiles = self._tiles
 
-        if self._hidden_tilegrid:
+        if self._hidden_tilegrid or self._hidden_by_parent:
             return False
 
         overlap = Area()
@@ -230,10 +239,10 @@ class TileGrid:
 
         start = 0
         if (self._absolute_transform.dx < 0) != flip_x:
-            start += (area.width() - 1) * x_stride
+            start += (area.x2 - area.x1 - 1) * x_stride
             x_stride *= -1
         if (self._absolute_transform.dy < 0) != flip_y:
-            start += (area.height() - 1) * y_stride
+            start += (area.y2 - area.y1 - 1) * y_stride
             y_stride *= -1
 
         full_coverage = area == overlap
@@ -298,7 +307,11 @@ class TileGrid:
                     input_pixel.tile // self._bitmap_width_in_tiles
                 ) * self._tile_height + local_y % self._tile_height
 
-                input_pixel.pixel = self.bitmap[input_pixel.tile_x, input_pixel.tile_y]
+                input_pixel.pixel = (
+                    self._bitmap._get_pixel(  # pylint: disable=protected-access
+                        input_pixel.tile_x, input_pixel.tile_y
+                    )
+                )
                 output_pixel.opaque = True
 
                 if self._pixel_shader is None:
@@ -352,7 +365,108 @@ class TileGrid:
         return full_coverage
 
     def _finish_refresh(self):
-        pass
+        first_draw = self._previous_area.x1 == self._previous_area.x2
+        hidden = self._hidden_tilegrid or self._hidden_by_parent
+        if not first_draw and hidden:
+            self._previous_area.x2 = self._previous_area.x1
+        elif self._moved or first_draw:
+            self._current_area.copy_into(self._previous_area)
+
+        self._moved = False
+        self._full_change = False
+        self._partial_change = False
+        if isinstance(self._pixel_shader, (Palette, ColorConverter)):
+            self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
+        if isinstance(self._bitmap, (Bitmap, Shape)):
+            self._bitmap._finish_refresh()  # pylint: disable=protected-access
+
+    def _get_refresh_areas(self, areas: list[Area]) -> None:
+        # pylint: disable=invalid-name, too-many-branches, too-many-statements
+        first_draw = self._previous_area.x1 == self._previous_area.x2
+        hidden = self._hidden_tilegrid or self._hidden_by_parent
+
+        # Check hidden first because it trumps all other changes
+        if hidden:
+            self._rendered_hidden = True
+            if not first_draw:
+                areas.append(self._previous_area)
+            return
+        if self._moved and not first_draw:
+            self._previous_area.union(self._current_area, self._dirty_area)
+            if self._dirty_area.size() < 2 * self._pixel_width * self._pixel_height:
+                areas.append(self._dirty_area)
+                return
+            areas.append(self._current_area)
+            areas.append(self._previous_area)
+            return
+
+        tail = areas[-1]
+        # If we have an in-memory bitmap, then check it for modifications
+        if isinstance(self._bitmap, Bitmap):
+            self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
+            if tail != areas[-1]:
+                # Special case a TileGrid that shows a full bitmap and use its
+                # dirty area. Copy it to ours so we can transform it.
+                if self._tiles_in_bitmap == 1:
+                    areas[-1].copy_into(self._dirty_area)
+                    self._partial_change = True
+                else:
+                    self._full_change = True
+        elif isinstance(self._bitmap, Shape):
+            self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
+            if areas[-1] != tail:
+                areas[-1].copy_into(self._dirty_area)
+                self._partial_change = True
+
+        self._full_change = self._full_change or (
+            isinstance(self._pixel_shader, (Palette, ColorConverter))
+            and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
+        )
+        if self._full_change or first_draw:
+            areas.append(self._current_area)
+            return
+
+        if self._partial_change:
+            x = self._x
+            y = self._y
+            if self._absolute_transform.transpose_xy:
+                x, y = y, x
+            x1 = self._dirty_area.x1
+            x2 = self._dirty_area.x2
+            if self._flip_x:
+                x1 = self._pixel_width - x1
+                x2 = self._pixel_width - x2
+            y1 = self._dirty_area.y1
+            y2 = self._dirty_area.y2
+            if self._flip_y:
+                y1 = self._pixel_height - y1
+                y2 = self._pixel_height - y2
+            if self._transpose_xy != self._absolute_transform.transpose_xy:
+                x1, y1 = y1, x1
+                x2, y2 = y2, x2
+            self._dirty_area.x1 = (
+                self._absolute_transform.x + self._absolute_transform.dx * (x + x1)
+            )
+            self._dirty_area.y1 = (
+                self._absolute_transform.y + self._absolute_transform.dy * (y + y1)
+            )
+            self._dirty_area.x2 = (
+                self._absolute_transform.x + self._absolute_transform.dx * (x + x2)
+            )
+            self._dirty_area.y2 = (
+                self._absolute_transform.y + self._absolute_transform.dy * (y + y2)
+            )
+            if self._dirty_area.y2 < self._dirty_area.y1:
+                self._dirty_area.y1, self._dirty_area.y2 = (
+                    self._dirty_area.y2,
+                    self._dirty_area.y1,
+                )
+            if self._dirty_area.x2 < self._dirty_area.x1:
+                self._dirty_area.x1, self._dirty_area.x2 = (
+                    self._dirty_area.x2,
+                    self._dirty_area.x1,
+                )
+            areas.append(self._dirty_area)
 
     @property
     def hidden(self) -> bool:

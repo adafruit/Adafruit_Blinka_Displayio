@@ -191,8 +191,9 @@ class Display:
             allocate_display,
         )
 
-        allocate_display(cls)
-        return super().__new__(cls)
+        display_instance = super().__new__(cls)
+        allocate_display(display_instance)
+        return display_instance
 
     def _initialize(self, init_sequence):
         i = 0
@@ -290,12 +291,12 @@ class Display:
         return True
 
     def _refresh_display(self):
-        # pylint: disable=protected-access
         if not self._core.start_refresh():
             return False
 
         # TODO: Likely move this to _refresh_area()
         # Go through groups and and add each to buffer
+        """
         if self._core.current_group is not None:
             buffer = Image.new("RGBA", (self._core.width, self._core.height))
             # Recursively have everything draw to the image
@@ -304,7 +305,7 @@ class Display:
             )  # pylint: disable=protected-access
             # save image to buffer (or probably refresh buffer so we can compare)
             self._buffer.paste(buffer)
-
+        """
         areas_to_refresh = self._get_refresh_areas()
 
         for area in areas_to_refresh:
@@ -317,9 +318,12 @@ class Display:
     def _get_refresh_areas(self) -> list[Area]:
         """Get a list of areas to be refreshed"""
         areas = []
-        if self._core.current_group is not None:
-            # Eventually calculate dirty rectangles here
-            areas.append(Area(0, 0, self._core.width, self._core.height))
+        if self._core.full_refresh:
+            areas.append(self._core.area)
+        elif self._core.current_group is not None:
+            self._core.current_group._get_refresh_areas(  # pylint: disable=protected-access
+                areas
+            )
         return areas
 
     def background(self):

@@ -38,19 +38,22 @@ class Area:
     def __str__(self):
         return f"Area TL({self.x1},{self.y1}) BR({self.x2},{self.y2})"
 
-    def _copy_into(self, dst) -> None:
+    def copy_into(self, dst) -> None:
+        """Copy the area into another area."""
         dst.x1 = self.x1
         dst.y1 = self.y1
         dst.x2 = self.x2
         dst.y2 = self.y2
 
-    def _scale(self, scale: int) -> None:
+    def scale(self, scale: int) -> None:
+        """Scale the area by scale."""
         self.x1 *= scale
         self.y1 *= scale
         self.x2 *= scale
         self.y2 *= scale
 
-    def _shift(self, dx: int, dy: int) -> None:
+    def shift(self, dx: int, dy: int) -> None:
+        """Shift the area by dx and dy."""
         self.x1 += dx
         self.y1 += dy
         self.x2 += dx
@@ -70,21 +73,24 @@ class Area:
 
         return overlap.y1 < overlap.y2
 
-    def _empty(self):
+    def empty(self):
+        """Return True if the area is empty."""
         return (self.x1 == self.x2) or (self.y1 == self.y2)
 
-    def _canon(self):
+    def canon(self):
+        """Make sure the area is in canonical form."""
         if self.x1 > self.x2:
             self.x1, self.x2 = self.x2, self.x1
         if self.y1 > self.y2:
             self.y1, self.y2 = self.y2, self.y1
 
-    def _union(self, other, union):
-        if self._empty():
-            self._copy_into(union)
+    def union(self, other, union):
+        """Combine this area along with another into union"""
+        if self.empty():
+            self.copy_into(union)
             return
-        if other._empty():  # pylint: disable=protected-access
-            other._copy_into(union)  # pylint: disable=protected-access
+        if other.empty():
+            other.copy_into(union)
             return
 
         union.x1 = min(self.x1, other.x1)

@@ -58,8 +58,9 @@ class I2CDisplay:
             allocate_display_bus,
         )
 
-        allocate_display_bus(cls)
-        return super().__new__(cls)
+        display_bus_instance = super().__new__(cls)
+        allocate_display_bus(display_bus_instance)
+        return display_bus_instance
 
     def _release(self):
         self.reset()

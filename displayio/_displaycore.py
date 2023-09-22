@@ -258,21 +258,6 @@ class _DisplayCore:
             )
         return False
 
-    """
-    def _clip(self, rectangle):
-        if self._core.rotation in (90, 270):
-            width, height = self._core.height, self._core.width
-        else:
-            width, height = self._core.width, self._core.height
-
-        rectangle.x1 = max(rectangle.x1, 0)
-        rectangle.y1 = max(rectangle.y1, 0)
-        rectangle.x2 = min(rectangle.x2, width)
-        rectangle.y2 = min(rectangle.y2, height)
-
-        return rectangle
-    """
-
     def clip_area(self, area: Area, clipped: Area) -> bool:
         """Shrink the area to the region shared by the two areas"""
 
@@ -308,11 +293,11 @@ class _DisplayCore:
         if self.colorspace.depth < 8:
             pixels_per_byte = 8 // self.colorspace.depth
             if self.colorspace.pixels_in_byte_share_row:
-                region_x1 /= pixels_per_byte * self.colorspace.bytes_per_cell
-                region_x2 /= pixels_per_byte * self.colorspace.bytes_per_cell
+                region_x1 //= pixels_per_byte * self.colorspace.bytes_per_cell
+                region_x2 //= pixels_per_byte * self.colorspace.bytes_per_cell
             else:
-                region_y1 /= pixels_per_byte * self.colorspace.bytes_per_cell
-                region_y2 /= pixels_per_byte * self.colorspace.bytes_per_cell
+                region_y1 //= pixels_per_byte * self.colorspace.bytes_per_cell
+                region_y2 //= pixels_per_byte * self.colorspace.bytes_per_cell
 
         region_x2 -= 1
         region_y2 -= 1
@@ -330,12 +315,6 @@ class _DisplayCore:
             )
         else:
             data_type = DISPLAY_COMMAND
-            """
-            self._core.send(
-                DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command]) + data
-            )
-            self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
-            """
 
         if self.ram_width < 0x100:  # Single Byte Bounds
             data = struct.pack(">BB", region_x1, region_x2)
@@ -426,6 +405,7 @@ class _DisplayCore:
         """
         Send the data to the current bus
         """
+        print(data_type, chip_select, data)
         self._send(data_type, chip_select, data)
 
     def begin_transaction(self) -> None:

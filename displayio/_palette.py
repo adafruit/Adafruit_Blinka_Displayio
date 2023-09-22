@@ -139,6 +139,9 @@ class Palette:
         """Returns True if the palette index is transparent. Returns False if opaque."""
         return self._colors[palette_index].transparent
 
+    def _finish_refresh(self):
+        pass
+
     @property
     def dither(self) -> bool:
         """When true the palette dithers the output by adding

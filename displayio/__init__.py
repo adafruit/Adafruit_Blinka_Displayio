@@ -43,8 +43,9 @@ display_buses = []
 
 def _background():
     """Main thread function to loop through all displays and update them"""
-    for display in displays:
-        display.background()
+    while True:
+        for display in displays:
+            display.background()
 
 
 def release_displays() -> None:
