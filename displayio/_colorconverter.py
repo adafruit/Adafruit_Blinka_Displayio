@@ -21,7 +21,8 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 from ._colorspace import Colorspace
-from ._structs import ColorspaceStruct
+from ._structs import ColorspaceStruct, InputPixelStruct, OutputPixelStruct
+from ._helpers import clamp, bswap16
 
 
 class ColorConverter:
@@ -46,23 +47,16 @@ class ColorConverter:
         self._cached_output_color = None
 
     @staticmethod
-    def _clamp(value, min_value, max_value):
-        return max(min(max_value, value), min_value)
-
-    @staticmethod
-    def _bswap16(value):
-        # ABCD -> 00DC
-        return (value & 0xFF00) >> 8 | (value & 0x00FF) << 8
-
-    def _dither_noise_1(self, noise):
+    def _dither_noise_1(noise):
         noise = (noise >> 13) ^ noise
         more_noise = (
             noise * (noise * noise * 60493 + 19990303) + 1376312589
         ) & 0x7FFFFFFF
-        return self._clamp(int((more_noise / (1073741824.0 * 2)) * 255), 0, 0xFFFFFFFF)
+        return clamp(int((more_noise / (1073741824.0 * 2)) * 255), 0, 0xFFFFFFFF)
 
-    def _dither_noise_2(self, x, y):
-        return self._dither_noise_1(x + y * 0xFFFF)
+    @staticmethod
+    def _dither_noise_2(x, y):
+        return ColorConverter._dither_noise_1(x + y * 0xFFFF)
 
     @staticmethod
     def _compute_rgb565(color_rgb888: int):
@@ -120,11 +114,12 @@ class ColorConverter:
 
         return hue
 
-    def _compute_sevencolor(self, color_rgb888: int):
+    @staticmethod
+    def _compute_sevencolor(color_rgb888: int):
         # pylint: disable=too-many-return-statements
-        chroma = self._compute_chroma(color_rgb888)
+        chroma = ColorConverter._compute_chroma(color_rgb888)
         if chroma >= 64:
-            hue = self._compute_hue(color_rgb888)
+            hue = ColorConverter._compute_hue(color_rgb888)
             # Red 0
             if hue < 10:
                 return 0x4
@@ -142,7 +137,7 @@ class ColorConverter:
                 return 0x3
             # The rest is red to 255
             return 0x4
-        luma = self._compute_luma(color_rgb888)
+        luma = ColorConverter._compute_luma(color_rgb888)
         if luma >= 128:
             return 0x1  # White
         return 0x0  # Black
@@ -173,51 +168,54 @@ class ColorConverter:
         else:
             raise ValueError("Color must be an integer or 3 or 4 value tuple")
 
-        input_pixel = {
-            "pixel": color,
-            "x": 0,
-            "y": 0,
-            "tile": 0,
-            "tile_x": 0,
-            "tile_y": 0,
-        }
+        input_pixel = InputPixelStruct(color)
+        output_pixel = OutputPixelStruct()
 
-        output_pixel = {"pixel": 0, "opaque": False}
+        self._convert(self._output_colorspace, input_pixel, output_pixel)
 
-        if input_pixel["pixel"] == self._transparent_color:
-            return output_pixel["pixel"]
+        return output_pixel.pixel
+
+    def _convert(
+        self,
+        colorspace: Colorspace,
+        input_pixel: InputPixelStruct,
+        output_color: OutputPixelStruct,
+    ) -> None:
+        pixel = input_pixel.pixel
+
+        if self._transparent_color == pixel:
+            output_color.opaque = False
+            return
 
         if (
             not self._dither
             and self._cached_colorspace == self._output_colorspace
-            and self._cached_input_pixel == input_pixel["pixel"]
+            and self._cached_input_pixel == input_pixel.pixel
         ):
-            return self._cached_output_color
+            output_color = self._cached_output_color
+            return
 
         rgb888_pixel = input_pixel
-        rgb888_pixel["pixel"] = self._convert_pixel(
-            self._input_colorspace, input_pixel["pixel"]
+        rgb888_pixel.pixel = self._convert_pixel(
+            self._input_colorspace, input_pixel.pixel
         )
-        self._convert_color(
-            self._output_colorspace, self._dither, rgb888_pixel, output_pixel
-        )
+        self._convert_color(colorspace, self._dither, rgb888_pixel, output_color)
 
         if not self._dither:
-            self._cached_colorspace = self._output_colorspace
-            self._cached_input_pixel = input_pixel["pixel"]
-            self._cached_output_color = output_pixel["pixel"]
+            self._cached_colorspace = colorspace
+            self._cached_input_pixel = input_pixel.pixel
+            self._cached_output_color = output_color.pixel
 
-        return output_pixel["pixel"]
-
-    def _convert_pixel(self, colorspace: Colorspace, pixel: int) -> int:
-        pixel = self._clamp(pixel, 0, 0xFFFFFFFF)
+    @staticmethod
+    def _convert_pixel(colorspace: Colorspace, pixel: int) -> int:
+        pixel = clamp(pixel, 0, 0xFFFFFFFF)
         if colorspace in (
             Colorspace.RGB565_SWAPPED,
             Colorspace.RGB555_SWAPPED,
             Colorspace.BGR565_SWAPPED,
             Colorspace.BGR555_SWAPPED,
         ):
-            pixel = self._bswap16(pixel)
+            pixel = bswap16(pixel)
         if colorspace in (Colorspace.RGB565, Colorspace.RGB565_SWAPPED):
             red8 = (pixel >> 11) << 3
             grn8 = ((pixel >> 5) << 2) & 0xFF
@@ -242,19 +240,19 @@ class ColorConverter:
             return (pixel & 0xFF) & 0x01010101
         return pixel
 
+    @staticmethod
     def _convert_color(
-        self,
         colorspace: ColorspaceStruct,
         dither: bool,
-        input_pixel: dict,
-        output_color: dict,
+        input_pixel: InputPixelStruct,
+        output_color: OutputPixelStruct,
     ) -> None:
         # pylint: disable=too-many-return-statements, too-many-branches, too-many-statements
-        pixel = input_pixel["pixel"]
+        pixel = input_pixel.pixel
         if dither:
-            rand_red = self._dither_noise_2(input_pixel["x"], input_pixel["y"])
-            rand_grn = self._dither_noise_2(input_pixel["x"] + 33, input_pixel["y"])
-            rand_blu = self._dither_noise_2(input_pixel["x"], input_pixel["y"] + 33)
+            rand_red = ColorConverter._dither_noise_2(input_pixel.x, input_pixel.y)
+            rand_grn = ColorConverter._dither_noise_2(input_pixel.x + 33, input_pixel.y)
+            rand_blu = ColorConverter._dither_noise_2(input_pixel.x, input_pixel.y + 33)
 
             red8 = pixel >> 16
             grn8 = (pixel >> 8) & 0xFF
@@ -272,49 +270,51 @@ class ColorConverter:
             pixel = (red8 << 16) | (grn8 << 8) | blu8
 
         if colorspace.depth == 16:
-            packed = self._compute_rgb565(pixel)
+            packed = ColorConverter._compute_rgb565(pixel)
             if colorspace.reverse_bytes_in_word:
-                packed = self._bswap16(packed)
-            output_color["pixel"] = packed
-            output_color["opaque"] = True
+                packed = bswap16(packed)
+            output_color.pixel = packed
+            output_color.opaque = True
             return
         if colorspace.tricolor:
-            output_color["pixel"] = self._compute_luma(pixel) >> (8 - colorspace.depth)
-            if self._compute_chroma(pixel) <= 16:
+            output_color.pixel = ColorConverter._compute_luma(pixel) >> (
+                8 - colorspace.depth
+            )
+            if ColorConverter._compute_chroma(pixel) <= 16:
                 if not colorspace.grayscale:
-                    output_color["pixel"] = 0
-                output_color["opaque"] = True
+                    output_color.pixel = 0
+                output_color.opaque = True
                 return
-            pixel_hue = self._compute_hue(pixel)
-            output_color["pixel"] = self._compute_tricolor(
-                colorspace, pixel_hue, output_color["pixel"]
+            pixel_hue = ColorConverter._compute_hue(pixel)
+            output_color.pixel = ColorConverter._compute_tricolor(
+                colorspace, pixel_hue, output_color.pixel
             )
             return
         if colorspace.grayscale and colorspace.depth <= 8:
             bitmask = (1 << colorspace.depth) - 1
-            output_color["pixel"] = (
-                self._compute_luma(pixel) >> colorspace.grayscale_bit
+            output_color.pixel = (
+                ColorConverter._compute_luma(pixel) >> colorspace.grayscale_bit
             ) & bitmask
-            output_color["opaque"] = True
+            output_color.opaque = True
             return
         if colorspace.depth == 32:
-            output_color["pixel"] = pixel
-            output_color["opaque"] = True
+            output_color.pixel = pixel
+            output_color.opaque = True
             return
         if colorspace.depth == 8 and colorspace.grayscale:
-            packed = self._compute_rgb332(pixel)
-            output_color["pixel"] = packed
-            output_color["opaque"] = True
+            packed = ColorConverter._compute_rgb332(pixel)
+            output_color.pixel = packed
+            output_color.opaque = True
             return
         if colorspace.depth == 4:
             if colorspace.sevencolor:
-                packed = self._compute_sevencolor(pixel)
+                packed = ColorConverter._compute_sevencolor(pixel)
             else:
-                packed = self._compute_rgbd(pixel)
-            output_color["pixel"] = packed
-            output_color["opaque"] = True
+                packed = ColorConverter._compute_rgbd(pixel)
+            output_color.pixel = packed
+            output_color.opaque = True
             return
-        output_color["opaque"] = False
+        output_color.opaque = False
 
     def make_transparent(self, color: int) -> None:
         """Set the transparent color or index for the ColorConverter. This will

@@ -17,14 +17,16 @@ displayio for Blinka
 
 """
 
+import struct
 from typing import Union, Optional, Tuple
-from PIL import Image
 from ._bitmap import Bitmap
 from ._colorconverter import ColorConverter
 from ._ondiskbitmap import OnDiskBitmap
 from ._shape import Shape
 from ._palette import Palette
-from ._structs import RectangleStruct, TransformStruct
+from ._structs import TransformStruct, InputPixelStruct, OutputPixelStruct
+from ._colorspace import Colorspace
+from ._area import Area
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -73,8 +75,8 @@ class TileGrid:
         self._hidden_tilegrid = False
         self._x = x
         self._y = y
-        self._width = width  # Number of Tiles Wide
-        self._height = height  # Number of Tiles High
+        self._width_in_tiles = width
+        self._height_in_tiles = height
         self._transpose_xy = False
         self._flip_x = False
         self._flip_y = False
@@ -96,13 +98,16 @@ class TileGrid:
             raise ValueError("Default Tile is out of range")
         self._pixel_width = width * tile_width
         self._pixel_height = height * tile_height
-        self._tiles = (self._width * self._height) * [default_tile]
+        self._tiles = (self._width_in_tiles * self._height_in_tiles) * [default_tile]
         self._in_group = False
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
-        self._current_area = RectangleStruct(
-            0, 0, self._pixel_width, self._pixel_height
-        )
+        self._current_area = Area(0, 0, self._pixel_width, self._pixel_height)
         self._moved = False
+        self._bitmap_width_in_tiles = bitmap_width // tile_width
+        self._tiles_in_bitmap = self._bitmap_width_in_tiles * (
+            bitmap_height // tile_height
+        )
+        self.inline_tiles = False  # We have plenty of memory
 
     def _update_transform(self, absolute_transform):
         """Update the parent transform and child transforms"""
@@ -196,104 +201,155 @@ class TileGrid:
         )
         image.putalpha(alpha.convert("L"))
 
-    def _fill_area(self, buffer):
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def _fill_area(
+        self, colorspace: Colorspace, area: Area, mask: bytearray, buffer: bytearray
+    ) -> bool:
         """Draw onto the image"""
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+
+        # If no tiles are present we have no impact
+        tiles = self._tiles
+
         if self._hidden_tilegrid:
-            return
+            return False
+
+        overlap = Area()
+        if not self._current_area.compute_overlap(area, overlap):
+            return False
 
         if self._bitmap.width <= 0 or self._bitmap.height <= 0:
-            return
+            return False
 
-        # Copy class variables to local variables in case something changes
-        x = self._x
-        y = self._y
-        width = self._width
-        height = self._height
-        tile_width = self._tile_width
-        tile_height = self._tile_height
-        bitmap_width = self._bitmap.width
-        pixel_width = self._pixel_width
-        pixel_height = self._pixel_height
-        tiles = self._tiles
-        absolute_transform = self._absolute_transform
-        pixel_shader = self._pixel_shader
-        bitmap = self._bitmap
-        tiles = self._tiles
+        x_stride = 1
+        y_stride = area.width()
 
-        tile_count_x = bitmap_width // tile_width
+        flip_x = self._flip_x
+        flip_y = self._flip_y
+        if self._transpose_xy != self._absolute_transform.transpose_xy:
+            flip_x, flip_y = flip_y, flip_x
 
-        image = Image.new(
-            "RGBA",
-            (width * tile_width, height * tile_height),
-            (0, 0, 0, 0),
+        start = 0
+        if (self._absolute_transform.dx < 0) != flip_x:
+            start += (area.width() - 1) * x_stride
+            x_stride *= -1
+        if (self._absolute_transform.dy < 0) != flip_y:
+            start += (area.height() - 1) * y_stride
+            y_stride *= -1
+
+        full_coverage = area == overlap
+
+        transformed = Area()
+        area.transform_within(
+            flip_x != (self._absolute_transform.dx < 0),
+            flip_y != (self._absolute_transform.dy < 0),
+            self.transpose_xy != self._absolute_transform.transpose_xy,
+            overlap,
+            self._current_area,
+            transformed,
         )
 
-        for tile_x in range(width):
-            for tile_y in range(height):
-                tile_index = tiles[tile_y * width + tile_x]
-                tile_index_x = tile_index % tile_count_x
-                tile_index_y = tile_index // tile_count_x
-                tile_image = bitmap._image  # pylint: disable=protected-access
-                if isinstance(pixel_shader, Palette):
-                    tile_image = tile_image.copy().convert("P")
-                    self._apply_palette(tile_image)
-                    tile_image = tile_image.convert("RGBA")
-                    self._add_alpha(tile_image)
-                elif isinstance(pixel_shader, ColorConverter):
-                    # This will be needed for eInks, grayscale, and monochrome displays
-                    pass
-                image.alpha_composite(
-                    tile_image,
-                    dest=(tile_x * tile_width, tile_y * tile_height),
-                    source=(
-                        tile_index_x * tile_width,
-                        tile_index_y * tile_height,
-                        tile_index_x * tile_width + tile_width,
-                        tile_index_y * tile_height + tile_height,
-                    ),
-                )
+        start_x = transformed.x1 - self._current_area.x1
+        end_x = transformed.x2 - self._current_area.x1
+        start_y = transformed.y1 - self._current_area.y1
+        end_y = transformed.y2 - self._current_area.y1
 
-        if absolute_transform is not None:
-            if absolute_transform.scale > 1:
-                image = image.resize(
-                    (
-                        int(pixel_width * absolute_transform.scale),
-                        int(
-                            pixel_height * absolute_transform.scale,
-                        ),
-                    ),
-                    resample=Image.NEAREST,
-                )
-            if absolute_transform.mirror_x != self._flip_x:
-                image = image.transpose(Image.FLIP_LEFT_RIGHT)
-            if absolute_transform.mirror_y != self._flip_y:
-                image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            if absolute_transform.transpose_xy != self._transpose_xy:
-                image = image.transpose(Image.TRANSPOSE)
-            x *= absolute_transform.dx
-            y *= absolute_transform.dy
-            x += absolute_transform.x
-            y += absolute_transform.y
+        if (self._absolute_transform.dx < 0) != flip_x:
+            x_shift = area.x2 - overlap.x2
+        else:
+            x_shift = overlap.x1 - area.x1
+        if (self._absolute_transform.dy < 0) != flip_y:
+            y_shift = area.y2 - overlap.y2
+        else:
+            y_shift = overlap.y1 - area.y1
 
-        source_x = source_y = 0
-        if x < 0:
-            source_x = round(0 - x)
-            x = 0
-        if y < 0:
-            source_y = round(0 - y)
-            y = 0
+        if self._transpose_xy != self._absolute_transform.transpose_xy:
+            x_stride, y_stride = y_stride, x_stride
+            x_shift, y_shift = y_shift, x_shift
 
-        x = round(x)
-        y = round(y)
+        pixels_per_byte = 8 // colorspace.depth
 
-        if (
-            x <= buffer.width
-            and y <= buffer.height
-            and source_x <= image.width
-            and source_y <= image.height
-        ):
-            buffer.alpha_composite(image, (x, y), source=(source_x, source_y))
+        input_pixel = InputPixelStruct()
+        output_pixel = OutputPixelStruct()
+        for input_pixel.y in range(start_y, end_y):
+            row_start = (
+                start + (input_pixel.y - start_y + y_shift) * y_stride
+            )  # In Pixels
+            local_y = input_pixel.y // self._absolute_transform.scale
+            for input_pixel.x in range(start_x, end_x):
+                offset = (
+                    row_start + (input_pixel.x - start_x + x_shift) * x_stride
+                )  # In Pixels
+
+                # Check the mask first to see if the pixel has already been set
+                if mask[offset // 32] & (1 << (offset % 32)):
+                    continue
+                local_x = input_pixel.x // self._absolute_transform.scale
+                tile_location = (
+                    (local_y // self._tile_height + self._top_left_y)
+                    % self._height_in_tiles
+                ) * self._width_in_tiles + (
+                    local_x // self._tile_width + self._top_left_x
+                ) % self._width_in_tiles
+                input_pixel.tile = tiles[tile_location]
+                input_pixel.tile_x = (
+                    input_pixel.tile % self._bitmap_width_in_tiles
+                ) * self._tile_width + local_x % self._tile_width
+                input_pixel.tile_y = (
+                    input_pixel.tile // self._bitmap_width_in_tiles
+                ) * self._tile_height + local_y % self._tile_height
+
+                input_pixel.pixel = self.bitmap[input_pixel.tile_x, input_pixel.tile_y]
+                output_pixel.opaque = True
+
+                if self._pixel_shader is None:
+                    output_pixel.pixel = input_pixel.pixel
+                elif isinstance(self._pixel_shader, Palette):
+                    self._pixel_shader._get_color(  # pylint: disable=protected-access
+                        colorspace, input_pixel, output_pixel
+                    )
+                elif isinstance(self._pixel_shader, ColorConverter):
+                    self._pixel_shader._convert(  # pylint: disable=protected-access
+                        colorspace, input_pixel, output_pixel
+                    )
+
+                if not output_pixel.opaque:
+                    full_coverage = False
+                else:
+                    mask[offset // 32] |= 1 << (offset % 32)
+                    if colorspace.depth == 16:
+                        buffer = (
+                            buffer[:offset]
+                            + struct.pack("H", output_pixel.pixel)
+                            + buffer[offset + 2 :]
+                        )
+                    elif colorspace.depth == 32:
+                        buffer = (
+                            buffer[:offset]
+                            + struct.pack("I", output_pixel.pixel)
+                            + buffer[offset + 4 :]
+                        )
+                    elif colorspace.depth == 8:
+                        buffer[offset] = output_pixel.pixel & 0xFF
+                    elif colorspace.depth < 8:
+                        # Reorder the offsets to pack multiple rows into
+                        # a byte (meaning they share a column).
+                        if not colorspace.pixels_in_byte_share_row:
+                            width = area.width()
+                            row = offset // width
+                            col = offset % width
+                            # Dividing by pixels_per_byte does truncated division
+                            # even if we multiply it back out
+                            offset = (
+                                col * pixels_per_byte
+                                + (row // pixels_per_byte) * width
+                                + (row % pixels_per_byte)
+                            )
+                        shift = (offset % pixels_per_byte) * colorspace.depth
+                        if colorspace.reverse_pixels_in_byte:
+                            # Reverse the shift by subtracting it from the leftmost shift
+                            shift = (pixels_per_byte - 1) * colorspace.depth - shift
+                        buffer[offset // pixels_per_byte] |= output_pixel.pixel << shift
+        return full_coverage
 
     def _finish_refresh(self):
         pass
@@ -420,11 +476,15 @@ class TileGrid:
         if isinstance(index, (tuple, list)):
             x = index[0]
             y = index[1]
-            index = y * self._width + x
+            index = y * self._width_in_tiles + x
         elif isinstance(index, int):
-            x = index % self._width
-            y = index // self._width
-        if x > self._width or y > self._height or index >= len(self._tiles):
+            x = index % self._width_in_tiles
+            y = index // self._width_in_tiles
+        if (
+            x > self._width_in_tiles
+            or y > self._height_in_tiles
+            or index >= len(self._tiles)
+        ):
             raise ValueError("Tile index out of bounds")
         return index
 
@@ -447,12 +507,12 @@ class TileGrid:
     @property
     def width(self) -> int:
         """Width in tiles"""
-        return self._width
+        return self._width_in_tiles
 
     @property
     def height(self) -> int:
         """Height in tiles"""
-        return self._height
+        return self._height_in_tiles
 
     @property
     def tile_width(self) -> int:

@@ -21,6 +21,8 @@ from __future__ import annotations
 from typing import Union, Callable
 from ._structs import TransformStruct
 from ._tilegrid import TileGrid
+from ._colorspace import Colorspace
+from ._area import Area
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -141,13 +143,19 @@ class Group:
         """Deletes the value at the given index."""
         del self._layers[index]
 
-    def _fill_area(self, buffer):
+    def _fill_area(
+        self, colorspace: Colorspace, area: Area, mask: int, buffer: bytearray
+    ) -> bool:
         if self._hidden_group:
-            return
+            return False
 
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
-                layer._fill_area(buffer)  # pylint: disable=protected-access
+                if layer._fill_area(  # pylint: disable=protected-access
+                    colorspace, area, mask, buffer
+                ):
+                    return True
+        return False
 
     def sort(self, key: Callable, reverse: bool) -> None:
         """Sort the members of the group."""

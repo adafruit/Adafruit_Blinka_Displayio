@@ -23,18 +23,27 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 
 import time
+import struct
 import circuitpython_typing
 from paralleldisplay import ParallelBus
 from ._fourwire import FourWire
 from ._group import Group
 from ._i2cdisplay import I2CDisplay
-from ._structs import ColorspaceStruct, TransformStruct, RectangleStruct
+from ._structs import ColorspaceStruct, TransformStruct
 from ._area import Area
 from ._displaybus import _DisplayBus
+from ._helpers import bswap16
+from ._constants import (
+    CHIP_SELECT_UNTOUCHED,
+    CHIP_SELECT_TOGGLE_EVERY_BYTE,
+    DISPLAY_COMMAND,
+    DISPLAY_DATA,
+    NO_COMMAND,
+)
 
 
 class _DisplayCore:
-    # pylint: disable=too-many-arguments, too-many-instance-attributes, too-many-locals
+    # pylint: disable=too-many-arguments, too-many-instance-attributes, too-many-locals, too-many-branches, too-many-statements
 
     def __init__(
         self,
@@ -229,15 +238,7 @@ class _DisplayCore:
         self.refresh_in_progress = False
         self.last_refresh = time.monotonic() * 1000
 
-    def get_refresh_areas(self) -> list:
-        """Get a list of areas to be refreshed"""
-        subrectangles = []
-        if self.current_group is not None:
-            # Eventually calculate dirty rectangles here
-            subrectangles.append(RectangleStruct(0, 0, self.width, self.height))
-        return subrectangles
-
-    def release(self) -> None:
+    def release_display_core(self) -> None:
         """Release the display from the current group"""
         # pylint: disable=protected-access
 
@@ -250,16 +251,32 @@ class _DisplayCore:
         mask: circuitpython_typing.WriteableBuffer,
         buffer: circuitpython_typing.WriteableBuffer,
     ) -> bool:
-        # pylint: disable=protected-access
         """Call the current group's fill area function"""
+        if self.current_group is not None:
+            return self.current_group._fill_area(  # pylint: disable=protected-access
+                self.colorspace, area, mask, buffer
+            )
+        return False
 
-        return self.current_group._fill_area(self.colorspace, area, mask, buffer)
+    """
+    def _clip(self, rectangle):
+        if self._core.rotation in (90, 270):
+            width, height = self._core.height, self._core.width
+        else:
+            width, height = self._core.width, self._core.height
+
+        rectangle.x1 = max(rectangle.x1, 0)
+        rectangle.y1 = max(rectangle.y1, 0)
+        rectangle.x2 = min(rectangle.x2, width)
+        rectangle.y2 = min(rectangle.y2, height)
+
+        return rectangle
+    """
 
     def clip_area(self, area: Area, clipped: Area) -> bool:
         """Shrink the area to the region shared by the two areas"""
-        # pylint: disable=protected-access
 
-        overlaps = self.area._compute_overlap(area, clipped)
+        overlaps = self.area.compute_overlap(area, clipped)
         if not overlaps:
             return False
 
@@ -280,6 +297,125 @@ class _DisplayCore:
                     clipped.y2 += pixels_per_byte - clipped.y2 % pixels_per_byte
 
         return True
+
+    def set_region_to_update(self, area: Area) -> None:
+        """Set the region to update"""
+        region_x1 = area.x1 + self.colstart
+        region_x2 = area.x2 + self.colstart
+        region_y1 = area.y1 + self.rowstart
+        region_y2 = area.y2 + self.rowstart
+
+        if self.colorspace.depth < 8:
+            pixels_per_byte = 8 // self.colorspace.depth
+            if self.colorspace.pixels_in_byte_share_row:
+                region_x1 /= pixels_per_byte * self.colorspace.bytes_per_cell
+                region_x2 /= pixels_per_byte * self.colorspace.bytes_per_cell
+            else:
+                region_y1 /= pixels_per_byte * self.colorspace.bytes_per_cell
+                region_y2 /= pixels_per_byte * self.colorspace.bytes_per_cell
+
+        region_x2 -= 1
+        region_y2 -= 1
+
+        chip_select = CHIP_SELECT_UNTOUCHED
+        if self.always_toggle_chip_select or self.data_as_commands:
+            chip_select = CHIP_SELECT_TOGGLE_EVERY_BYTE
+
+        # Set column
+        self.begin_transaction()
+        data_type = DISPLAY_DATA
+        if not self.data_as_commands:
+            self.send(
+                DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([self.column_command])
+            )
+        else:
+            data_type = DISPLAY_COMMAND
+            """
+            self._core.send(
+                DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command]) + data
+            )
+            self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
+            """
+
+        if self.ram_width < 0x100:  # Single Byte Bounds
+            data = struct.pack(">BB", region_x1, region_x2)
+        else:
+            if self.address_little_endian:
+                region_x1 = bswap16(region_x1)
+                region_x2 = bswap16(region_x2)
+            data = struct.pack(">HH", region_x1, region_x2)
+
+        # Quirk for SH1107 "SH1107_addressing"
+        #     Column lower command = 0x00, Column upper command = 0x10
+        if self.sh1107_addressing:
+            data = struct.pack(
+                ">BB",
+                ((region_x1 >> 4) & 0xF0) | 0x10,  # 0x10 to 0x17
+                region_x1 & 0x0F,  # 0x00 to 0x0F
+            )
+
+        self.send(data_type, chip_select, data)
+        self.end_transaction()
+
+        if self.set_current_column_command != NO_COMMAND:
+            self.begin_transaction()
+            self.send(
+                DISPLAY_COMMAND, chip_select, bytes([self.set_current_column_command])
+            )
+            # Only send the first half of data because it is the first coordinate.
+            self.send(DISPLAY_DATA, chip_select, data[: len(data) // 2])
+            self.end_transaction()
+
+        # Set row
+        self.begin_transaction()
+
+        if not self.data_as_commands:
+            self.send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([self.row_command]))
+
+        if self.ram_width < 0x100:  # Single Byte Bounds
+            data = struct.pack(">BB", region_y1, region_y2)
+        else:
+            if self.address_little_endian:
+                region_y1 = bswap16(region_y1)
+                region_y2 = bswap16(region_y2)
+            data = struct.pack(">HH", region_y1, region_y2)
+
+        # Quirk for SH1107 "SH1107_addressing"
+        #     Page address command = 0xB0
+        if self.sh1107_addressing:
+            data = struct.pack(">B", 0xB0 | region_y1)
+
+        self.send(data_type, chip_select, data)
+        self.end_transaction()
+
+        if self.set_current_row_command != NO_COMMAND:
+            self.begin_transaction()
+            self.send(
+                DISPLAY_COMMAND, chip_select, bytes([self.set_current_row_command])
+            )
+            # Only send the first half of data because it is the first coordinate.
+            self.send(DISPLAY_DATA, chip_select, data[: len(data) // 2])
+            self.end_transaction()
+
+        """
+        img = self._buffer.convert("RGB").crop(astuple(area))
+        img = img.rotate(360 - self._core.rotation, expand=True)
+
+        display_area = self._apply_rotation(area)
+
+        img = img.crop(astuple(display_area))
+
+        data = numpy.array(img).astype("uint16")
+        color = (
+            ((data[:, :, 0] & 0xF8) << 8)
+            | ((data[:, :, 1] & 0xFC) << 3)
+            | (data[:, :, 2] >> 3)
+        )
+
+        pixels = bytes(
+            numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
+        )
+        """
 
     def send(
         self,
