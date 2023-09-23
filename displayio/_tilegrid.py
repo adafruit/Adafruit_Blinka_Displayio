@@ -19,7 +19,7 @@ displayio for Blinka
 
 import struct
 from typing import Union, Optional, Tuple
-import circuitpython_typing
+from circuitpython_typing import WriteableBuffer
 from ._bitmap import Bitmap
 from ._colorconverter import ColorConverter
 from ._ondiskbitmap import OnDiskBitmap
@@ -215,8 +215,8 @@ class TileGrid:
         self,
         colorspace: Colorspace,
         area: Area,
-        mask: circuitpython_typing.WriteableBuffer,
-        buffer: circuitpython_typing.WriteableBuffer,
+        mask: WriteableBuffer,
+        buffer: WriteableBuffer,
     ) -> bool:
         """Draw onto the image"""
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -335,16 +335,18 @@ class TileGrid:
                 else:
                     mask[offset // 32] |= 1 << (offset % 32)
                     if colorspace.depth == 16:
-                        buffer = (
-                            buffer[:offset]
-                            + struct.pack("H", output_pixel.pixel)
-                            + buffer[offset + 2 :]
+                        struct.pack_into(
+                            "H",
+                            buffer,
+                            offset,
+                            output_pixel.pixel,
                         )
                     elif colorspace.depth == 32:
-                        buffer = (
-                            buffer[:offset]
-                            + struct.pack("I", output_pixel.pixel)
-                            + buffer[offset + 4 :]
+                        struct.pack_into(
+                            "I",
+                            buffer,
+                            offset,
+                            output_pixel.pixel,
                         )
                     elif colorspace.depth == 8:
                         buffer[offset] = output_pixel.pixel & 0xFF

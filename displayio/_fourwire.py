@@ -22,7 +22,7 @@ from typing import Optional
 import digitalio
 import busio
 import microcontroller
-import circuitpython_typing
+from circuitpython_typing import ReadableBuffer
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
@@ -95,7 +95,7 @@ class FourWire:
     def send(
         self,
         command,
-        data: circuitpython_typing.ReadableBuffer,
+        data: ReadableBuffer,
         *,
         toggle_every_byte: bool = False,
     ) -> None:
@@ -120,7 +120,7 @@ class FourWire:
         self,
         data_type: int,
         chip_select: int,
-        data: circuitpython_typing.ReadableBuffer,
+        data: ReadableBuffer,
     ):
         self._dc.value = data_type == DISPLAY_DATA
         if chip_select == CHIP_SELECT_TOGGLE_EVERY_BYTE:

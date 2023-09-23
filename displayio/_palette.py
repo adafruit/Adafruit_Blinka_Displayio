@@ -18,7 +18,7 @@ displayio for Blinka
 """
 
 from typing import Optional, Union, Tuple
-import circuitpython_typing
+from circuitpython_typing import ReadableBuffer
 from ._colorconverter import ColorConverter
 from ._colorspace import Colorspace
 from ._structs import InputPixelStruct, OutputPixelStruct, ColorStruct
@@ -63,7 +63,7 @@ class Palette:
     def __setitem__(
         self,
         index: int,
-        value: Union[int, circuitpython_typing.ReadableBuffer, Tuple[int, int, int]],
+        value: Union[int, ReadableBuffer, Tuple[int, int, int]],
     ) -> None:
         """Sets the pixel color at the given index. The index should be
         an integer in the range 0 to color_count-1.

@@ -24,16 +24,6 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 
 @dataclass
-class RectangleStruct:
-    # pylint: disable=invalid-name
-    """Rectangle Struct Dataclass. To eventually be replaced by Area."""
-    x1: int
-    y1: int
-    x2: int
-    y2: int
-
-
-@dataclass
 class TransformStruct:
     # pylint: disable=invalid-name
     """Transform Struct Dataclass"""

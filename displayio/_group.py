@@ -19,7 +19,7 @@ displayio for Blinka
 
 from __future__ import annotations
 from typing import Union, Callable
-import circuitpython_typing
+from circuitpython_typing import WriteableBuffer
 from ._structs import TransformStruct
 from ._tilegrid import TileGrid
 from ._colorspace import Colorspace
@@ -149,8 +149,8 @@ class Group:
         self,
         colorspace: Colorspace,
         area: Area,
-        mask: circuitpython_typing.WriteableBuffer,
-        buffer: circuitpython_typing.WriteableBuffer,
+        mask: WriteableBuffer,
+        buffer: WriteableBuffer,
     ) -> bool:
         if self._hidden_group:
             return False

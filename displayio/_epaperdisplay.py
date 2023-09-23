@@ -19,7 +19,7 @@ displayio for Blinka
 
 from typing import Optional
 import microcontroller
-import circuitpython_typing
+from circuitpython_typing import ReadableBuffer
 from ._group import Group
 from ._displaybus import _DisplayBus
 
@@ -42,8 +42,8 @@ class EPaperDisplay:
     def __init__(
         self,
         display_bus: _DisplayBus,
-        start_sequence: circuitpython_typing.ReadableBuffer,
-        stop_sequence: circuitpython_typing.ReadableBuffer,
+        start_sequence: ReadableBuffer,
+        stop_sequence: ReadableBuffer,
         *,
         width: int,
         height: int,
@@ -84,9 +84,9 @@ class EPaperDisplay:
 
         :param display_bus: The bus that the display is connected to
         :type _DisplayBus: displayio.FourWire or displayio.ParallelBus
-        :param ~circuitpython_typing.ReadableBuffer start_sequence: Byte-packed
+        :param ~ReadableBuffer start_sequence: Byte-packed
             initialization sequence.
-        :param ~circuitpython_typing.ReadableBuffer stop_sequence: Byte-packed
+        :param ~ReadableBuffer stop_sequence: Byte-packed
             initialization sequence.
         :param int width: Width in pixels
         :param int height: Height in pixels

@@ -24,7 +24,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 import time
 import struct
-import circuitpython_typing
+from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from paralleldisplay import ParallelBus
 from ._fourwire import FourWire
 from ._group import Group
@@ -248,8 +248,8 @@ class _DisplayCore:
     def fill_area(
         self,
         area: Area,
-        mask: circuitpython_typing.WriteableBuffer,
-        buffer: circuitpython_typing.WriteableBuffer,
+        mask: WriteableBuffer,
+        buffer: WriteableBuffer,
     ) -> bool:
         """Call the current group's fill area function"""
         if self.current_group is not None:
@@ -400,7 +400,7 @@ class _DisplayCore:
         self,
         data_type: int,
         chip_select: int,
-        data: circuitpython_typing.ReadableBuffer,
+        data: ReadableBuffer,
     ) -> None:
         """
         Send the data to the current bus

@@ -22,14 +22,12 @@ import struct
 from array import array
 from typing import Optional
 import digitalio
-from PIL import Image
 import microcontroller
-import circuitpython_typing
+from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from ._displaycore import _DisplayCore
 from ._displaybus import _DisplayBus
 from ._colorconverter import ColorConverter
 from ._group import Group
-from ._structs import RectangleStruct
 from ._area import Area
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
@@ -58,7 +56,7 @@ class Display:
     def __init__(
         self,
         display_bus: _DisplayBus,
-        init_sequence: circuitpython_typing.ReadableBuffer,
+        init_sequence: ReadableBuffer,
         *,
         width: int,
         height: int,
@@ -77,16 +75,14 @@ class Display:
         backlight_pin: Optional[microcontroller.Pin] = None,
         brightness_command: Optional[int] = None,
         brightness: float = 1.0,
-        auto_brightness: bool = False,
         single_byte_bounds: bool = False,
         data_as_commands: bool = False,
         auto_refresh: bool = True,
         native_frames_per_second: int = 60,
         backlight_on_high: bool = True,
         SH1107_addressing: bool = False,
-        set_vertical_scroll: int = 0,
     ):
-        # pylint: disable=unused-argument,too-many-locals,invalid-name
+        # pylint: disable=too-many-locals,invalid-name
         """Create a Display object on the given display bus (`displayio.FourWire` or
         `paralleldisplay.ParallelBus`).
 
@@ -157,12 +153,10 @@ class Display:
         self._native_frames_per_second = native_frames_per_second
         self._native_ms_per_frame = 1000 // native_frames_per_second
 
-        self._auto_brightness = auto_brightness
         self._brightness = brightness
         self._auto_refresh = auto_refresh
 
         self._initialize(init_sequence)
-        self._buffer = Image.new("RGB", (width, height))
         self._current_group = None
         self._last_refresh_call = 0
         self._refresh_thread = None
@@ -295,20 +289,7 @@ class Display:
         if not self._core.start_refresh():
             return False
 
-        # TODO: Likely move this to _refresh_area()
-        # Go through groups and and add each to buffer
-        """
-        if self._core.current_group is not None:
-            buffer = Image.new("RGBA", (self._core.width, self._core.height))
-            # Recursively have everything draw to the image
-            self._core.current_group._fill_area(
-                buffer
-            )  # pylint: disable=protected-access
-            # save image to buffer (or probably refresh buffer so we can compare)
-            self._buffer.paste(buffer)
-        """
         areas_to_refresh = self._get_refresh_areas()
-
         for area in areas_to_refresh:
             self._refresh_area(area)
 
@@ -404,39 +385,22 @@ class Display:
             self._core.end_transaction()
         return True
 
-    def _apply_rotation(self, rectangle):
-        """Adjust the rectangle coordinates based on rotation"""
-        if self._core.rotation == 90:
-            return RectangleStruct(
-                self._core.height - rectangle.y2,
-                rectangle.x1,
-                self._core.height - rectangle.y1,
-                rectangle.x2,
-            )
-        if self._core.rotation == 180:
-            return RectangleStruct(
-                self._core.width - rectangle.x2,
-                self._core.height - rectangle.y2,
-                self._core.width - rectangle.x1,
-                self._core.height - rectangle.y1,
-            )
-        if self._core.rotation == 270:
-            return RectangleStruct(
-                rectangle.y1,
-                self._core.width - rectangle.x2,
-                rectangle.y2,
-                self._core.width - rectangle.x1,
-            )
-        return rectangle
-
-    def fill_row(
-        self, y: int, buffer: circuitpython_typing.WriteableBuffer
-    ) -> circuitpython_typing.WriteableBuffer:
+    def fill_row(self, y: int, buffer: WriteableBuffer) -> WriteableBuffer:
         """Extract the pixels from a single row"""
-        for x in range(0, self._core.width):
-            _rgb_565 = self._colorconverter.convert(self._buffer.getpixel((x, y)))
-            buffer[x * 2] = (_rgb_565 >> 8) & 0xFF
-            buffer[x * 2 + 1] = _rgb_565 & 0xFF
+        if self._core.colorspace.depth != 16:
+            raise ValueError("Display must have a 16 bit colorspace.")
+
+        area = Area(0, y, self._core.width, y + 1)
+        pixels_per_word = (struct.calcsize("I") * 8) // self._core.colorspace.depth
+        buffer_size = self._core.width // pixels_per_word
+        pixels_per_buffer = area.size()
+        if pixels_per_buffer % pixels_per_word:
+            buffer_size += 1
+
+        buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
+        mask_length = (pixels_per_buffer // 32) + 1
+        mask = array("L", [0x00000000] * mask_length)
+        self._core.fill_area(area, mask, buffer)
         return buffer
 
     def release(self) -> None:
@@ -460,10 +424,7 @@ class Display:
 
     @property
     def brightness(self) -> float:
-        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`.
-        When `auto_brightness` is True, the value of `brightness` will change automatically.
-        If `brightness` is set, `auto_brightness` will be disabled and will be set to False.
-        """
+        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`."""
         return self._brightness
 
     @brightness.setter
@@ -497,19 +458,6 @@ class Display:
             self._brightness = value
         else:
             raise ValueError("Brightness must be between 0.0 and 1.0")
-
-    @property
-    def auto_brightness(self) -> bool:
-        """True when the display brightness is adjusted automatically, based on an ambient
-        light sensor or other method. Note that some displays may have this set to True by
-        default, but not actually implement automatic brightness adjustment.
-        `auto_brightness` is set to False if `brightness` is set manually.
-        """
-        return self._auto_brightness
-
-    @auto_brightness.setter
-    def auto_brightness(self, value: bool):
-        self._auto_brightness = value
 
     @property
     def width(self) -> int:
