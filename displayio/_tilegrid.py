@@ -25,7 +25,11 @@ from ._colorconverter import ColorConverter
 from ._ondiskbitmap import OnDiskBitmap
 from ._shape import Shape
 from ._palette import Palette
-from ._structs import TransformStruct, InputPixelStruct, OutputPixelStruct
+from ._structs import (
+    InputPixelStruct,
+    OutputPixelStruct,
+    null_transform,
+)
 from ._colorspace import Colorspace
 from ._area import Area
 
@@ -34,7 +38,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class TileGrid:
-    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-instance-attributes, too-many-statements
     """Position a grid of tiles sourced from a bitmap and pixel_shader combination. Multiple
     grids can share bitmaps and pixel shaders.
 
@@ -76,6 +80,7 @@ class TileGrid:
         self._hidden_tilegrid = False
         self._hidden_by_parent = False
         self._rendered_hidden = False
+        self._name = "Tilegrid"
         self._x = x
         self._y = y
         self._width_in_tiles = width
@@ -105,7 +110,7 @@ class TileGrid:
             (self._width_in_tiles * self._height_in_tiles) * [default_tile]
         )
         self._in_group = False
-        self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
+        self._absolute_transform = None
         self._current_area = Area(0, 0, self._pixel_width, self._pixel_height)
         self._dirty_area = Area(0, 0, 0, 0)
         self._previous_area = Area(0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF)
@@ -119,8 +124,10 @@ class TileGrid:
 
     def _update_transform(self, absolute_transform):
         """Update the parent transform and child transforms"""
+        self._in_group = absolute_transform is not None
         self._absolute_transform = absolute_transform
         if self._absolute_transform is not None:
+            self._moved = True
             self._update_current_x()
             self._update_current_y()
 
@@ -130,13 +137,18 @@ class TileGrid:
         else:
             width = self._pixel_width
 
-        if self._absolute_transform.transpose_xy:
+        absolute_transform = (
+            null_transform
+            if self._absolute_transform is None
+            else self._absolute_transform
+        )
+
+        if absolute_transform.transpose_xy:
             self._current_area.y1 = (
-                self._absolute_transform.y + self._absolute_transform.dy * self._x
+                absolute_transform.y + absolute_transform.dy * self._x
             )
-            self._current_area.y2 = (
-                self._absolute_transform.y
-                + self._absolute_transform.dy * (self._x + width)
+            self._current_area.y2 = absolute_transform.y + absolute_transform.dy * (
+                self._x + width
             )
             if self._current_area.y2 < self._current_area.y1:
                 self._current_area.y1, self._current_area.y2 = (
@@ -145,11 +157,10 @@ class TileGrid:
                 )
         else:
             self._current_area.x1 = (
-                self._absolute_transform.x + self._absolute_transform.dx * self._x
+                absolute_transform.x + absolute_transform.dx * self._x
             )
-            self._current_area.x2 = (
-                self._absolute_transform.x
-                + self._absolute_transform.dx * (self._x + width)
+            self._current_area.x2 = absolute_transform.x + absolute_transform.dx * (
+                self._x + width
             )
             if self._current_area.x2 < self._current_area.x1:
                 self._current_area.x1, self._current_area.x2 = (
@@ -163,13 +174,18 @@ class TileGrid:
         else:
             height = self._pixel_height
 
-        if self._absolute_transform.transpose_xy:
+        absolute_transform = (
+            null_transform
+            if self._absolute_transform is None
+            else self._absolute_transform
+        )
+
+        if absolute_transform.transpose_xy:
             self._current_area.x1 = (
-                self._absolute_transform.x + self._absolute_transform.dx * self._y
+                absolute_transform.x + absolute_transform.dx * self._y
             )
-            self._current_area.x2 = (
-                self._absolute_transform.x
-                + self._absolute_transform.dx * (self._y + height)
+            self._current_area.x2 = absolute_transform.x + absolute_transform.dx * (
+                self._y + height
             )
             if self._current_area.x2 < self._current_area.x1:
                 self._current_area.x1, self._current_area.x2 = (
@@ -178,11 +194,10 @@ class TileGrid:
                 )
         else:
             self._current_area.y1 = (
-                self._absolute_transform.y + self._absolute_transform.dy * self._y
+                absolute_transform.y + absolute_transform.dy * self._y
             )
-            self._current_area.y2 = (
-                self._absolute_transform.y
-                + self._absolute_transform.dy * (self._y + height)
+            self._current_area.y2 = absolute_transform.y + absolute_transform.dy * (
+                self._y + height
             )
             if self._current_area.y2 < self._current_area.y1:
                 self._current_area.y1, self._current_area.y2 = (
@@ -224,11 +239,14 @@ class TileGrid:
         # If no tiles are present we have no impact
         tiles = self._tiles
 
+        if tiles is None or len(tiles) == 0:
+            return False
+
         if self._hidden_tilegrid or self._hidden_by_parent:
             return False
 
-        overlap = Area()
-        if not self._current_area.compute_overlap(area, overlap):
+        overlap = Area()  # area, current_area, overlap
+        if not area.compute_overlap(self._current_area, overlap):
             return False
 
         if self._bitmap.width <= 0 or self._bitmap.height <= 0:
@@ -250,6 +268,8 @@ class TileGrid:
             start += (area.y2 - area.y1 - 1) * y_stride
             y_stride *= -1
 
+        # Track if this layer finishes filling in the given area. We can ignore any remaining
+        # layers at that point.
         full_coverage = area == overlap
 
         transformed = Area()
@@ -276,6 +296,7 @@ class TileGrid:
         else:
             y_shift = overlap.y1 - area.y1
 
+        # This untransposes x and y so it aligns with bitmap rows
         if self._transpose_xy != self._absolute_transform.transpose_xy:
             x_stride, y_stride = y_stride, x_stride
             x_shift, y_shift = y_shift, x_shift
@@ -290,6 +311,7 @@ class TileGrid:
             )  # In Pixels
             local_y = input_pixel.y // self._absolute_transform.scale
             for input_pixel.x in range(start_x, end_x):
+                # Compute the destination pixel in the buffer and mask based on the transformations
                 offset = (
                     row_start + (input_pixel.x - start_x + x_shift) * x_stride
                 )  # In Pixels
@@ -312,13 +334,19 @@ class TileGrid:
                     input_pixel.tile // self._bitmap_width_in_tiles
                 ) * self._tile_height + local_y % self._tile_height
 
-                input_pixel.pixel = (
-                    self._bitmap._get_pixel(  # pylint: disable=protected-access
-                        input_pixel.tile_x, input_pixel.tile_y
-                    )
-                )
-                output_pixel.opaque = True
+                output_pixel.pixel = 0
+                input_pixel.pixel = 0
 
+                # We always want to read bitmap pixels by row first and then transpose into
+                # the destination buffer because most bitmaps are row associated.
+                if isinstance(self._bitmap, (Bitmap, Shape, OnDiskBitmap)):
+                    input_pixel.pixel = (
+                        self._bitmap._get_pixel(  # pylint: disable=protected-access
+                            input_pixel.tile_x, input_pixel.tile_y
+                        )
+                    )
+
+                output_pixel.opaque = True
                 if self._pixel_shader is None:
                     output_pixel.pixel = input_pixel.pixel
                 elif isinstance(self._pixel_shader, Palette):
@@ -492,6 +520,20 @@ class TileGrid:
     def _get_rendered_hidden(self) -> bool:
         return self._rendered_hidden
 
+    def _set_all_tiles(self, tile_index: int) -> None:
+        """Set all tiles to the given tile index"""
+        if tile_index >= self._tiles_in_bitmap:
+            raise ValueError("Tile index out of bounds")
+        self._tiles = bytearray(
+            (self._width_in_tiles * self._height_in_tiles) * [tile_index]
+        )
+        self._full_change = True
+
+    def _set_top_left(self, x: int, y: int) -> None:
+        self._top_left_x = x
+        self._top_left_y = y
+        self._full_change = True
+
     @property
     def hidden(self) -> bool:
         """True when the TileGrid is hidden. This may be False even
@@ -515,8 +557,10 @@ class TileGrid:
         if not isinstance(value, int):
             raise TypeError("X should be a integer type")
         if self._x != value:
+            self._moved = True
             self._x = value
-            self._update_current_x()
+            if self._absolute_transform is not None:
+                self._update_current_x()
 
     @property
     def y(self) -> int:
@@ -528,8 +572,10 @@ class TileGrid:
         if not isinstance(value, int):
             raise TypeError("Y should be a integer type")
         if self._y != value:
+            self._moved = True
             self._y = value
-            self._update_current_y()
+            if self._absolute_transform is not None:
+                self._update_current_y()
 
     @property
     def flip_x(self) -> bool:
@@ -542,6 +588,7 @@ class TileGrid:
             raise TypeError("Flip X should be a boolean type")
         if self._flip_x != value:
             self._flip_x = value
+            self._full_change = True
 
     @property
     def flip_y(self) -> bool:
@@ -554,6 +601,7 @@ class TileGrid:
             raise TypeError("Flip Y should be a boolean type")
         if self._flip_y != value:
             self._flip_y = value
+            self._full_change = True
 
     @property
     def transpose_xy(self) -> bool:
@@ -563,13 +611,17 @@ class TileGrid:
         return self._transpose_xy
 
     @transpose_xy.setter
-    def transpose_xy(self, value: bool):
+    def transpose_xy(self, value: bool) -> None:
         if not isinstance(value, bool):
             raise TypeError("Transpose XY should be a boolean type")
         if self._transpose_xy != value:
             self._transpose_xy = value
+            if self._pixel_width == self._pixel_height:
+                self._full_change = True
+                return
             self._update_current_x()
             self._update_current_y()
+            self._moved = True
 
     @property
     def pixel_shader(self) -> Union[ColorConverter, Palette]:
@@ -586,6 +638,7 @@ class TileGrid:
             )
 
         self._pixel_shader = new_pixel_shader
+        self._full_change = True
 
     @property
     def bitmap(self) -> Union[Bitmap, OnDiskBitmap, Shape]:
@@ -610,6 +663,7 @@ class TileGrid:
             raise ValueError("New bitmap must be same size as old bitmap")
 
         self._bitmap = new_bitmap
+        self._full_change = True
 
     def _extract_and_check_index(self, index):
         if isinstance(index, (tuple, list)):

@@ -48,6 +48,7 @@ class Group:
         if not isinstance(scale, int) or scale < 1:
             raise ValueError("Scale must be >= 1")
         self._scale = 1  # Use the setter below to actually set the scale
+        self._name = "Group"
         self._group_x = x
         self._group_y = y
         self._hidden_group = False
@@ -154,14 +155,13 @@ class Group:
         mask: WriteableBuffer,
         buffer: WriteableBuffer,
     ) -> bool:
-        if self._hidden_group:
-            return False
-        for layer in self._layers:
-            if isinstance(layer, (Group, TileGrid)):
-                if layer._fill_area(  # pylint: disable=protected-access
-                    colorspace, area, mask, buffer
-                ):
-                    return True
+        if not self._hidden_group:
+            for layer in reversed(self._layers):
+                if isinstance(layer, (Group, TileGrid)):
+                    if layer._fill_area(  # pylint: disable=protected-access
+                        colorspace, area, mask, buffer
+                    ):
+                        return True
         return False
 
     def sort(self, key: Callable, reverse: bool) -> None:
@@ -169,13 +169,13 @@ class Group:
         self._layers.sort(key=key, reverse=reverse)
 
     def _finish_refresh(self):
-        for layer in self._layers:
+        for layer in reversed(self._layers):
             if isinstance(layer, (Group, TileGrid)):
                 layer._finish_refresh()  # pylint: disable=protected-access
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         # pylint: disable=protected-access
-        for layer in self._layers:
+        for layer in reversed(self._layers):
             if isinstance(layer, Group):
                 layer._get_refresh_areas(areas)
             elif isinstance(layer, TileGrid):

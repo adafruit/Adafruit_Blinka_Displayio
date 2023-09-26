@@ -32,9 +32,11 @@ class TransformStruct:
     dx: int = 1
     dy: int = 1
     scale: int = 1
-    transpose_xy: bool = False
+    width: int = 0
+    height: int = 0
     mirror_x: bool = False
     mirror_y: bool = False
+    transpose_xy: bool = False
 
 
 @dataclass
@@ -94,3 +96,6 @@ class ColorStruct:
             self.rgb888 & 0xFF,
             0 if self.transparent else 0xFF,
         )
+
+
+null_transform = TransformStruct()  # Use defaults

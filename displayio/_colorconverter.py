@@ -190,7 +190,7 @@ class ColorConverter:
 
         if (
             not self._dither
-            and self._cached_colorspace == self._output_colorspace
+            and self._cached_colorspace == colorspace
             and self._cached_input_pixel == input_pixel.pixel
         ):
             output_color = self._cached_output_color
