@@ -368,9 +368,7 @@ class Display:
                 buffer_size += 1
 
         # TODO: Optimize with memoryview
-        buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
-        mask_length = (pixels_per_buffer // 32) + 1
-        mask = array("L", [0] * mask_length)
+        mask_length = (pixels_per_buffer // 8) + 1  # 1 bit per pixel + 1
         remaining_rows = clipped.height()
 
         for subrect_index in range(subrectangles):
@@ -393,6 +391,8 @@ class Display:
                     8 // self._core.colorspace.depth
                 )
 
+            buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
+            mask = bytearray([0] * mask_length)
             self._core.fill_area(subrectangle, mask, buffer)
             self._core.begin_transaction()
             self._send_pixels(buffer[:subrectangle_size_bytes])

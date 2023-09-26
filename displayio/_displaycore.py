@@ -254,7 +254,8 @@ class _DisplayCore:
         if not overlaps:
             return False
 
-        # Expand the area if we have multiple pixels per byte and we need to byte align the bounds
+        # Expand the area if we have multiple pixels per byte and we need to byte
+        # align the bounds
         if self.colorspace.depth < 8:
             pixels_per_byte = (
                 8 // self.colorspace.depth * self.colorspace.bytes_per_cell

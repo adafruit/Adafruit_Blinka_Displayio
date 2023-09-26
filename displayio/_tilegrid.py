@@ -244,10 +244,12 @@ class TileGrid:
 
         if self._hidden_tilegrid or self._hidden_by_parent:
             return False
-
         overlap = Area()  # area, current_area, overlap
         if not area.compute_overlap(self._current_area, overlap):
             return False
+        # else:
+        #    print("Checking", area.x1, area.y1, area.x2, area.y2)
+        #    print("Overlap", overlap.x1, overlap.y1, overlap.x2, overlap.y2)
 
         if self._bitmap.width <= 0 or self._bitmap.height <= 0:
             return False
@@ -317,7 +319,7 @@ class TileGrid:
                 )  # In Pixels
 
                 # Check the mask first to see if the pixel has already been set
-                if mask[offset // 32] & (1 << (offset % 32)):
+                if mask[offset // 8] & (1 << (offset % 8)):
                     continue
                 local_x = input_pixel.x // self._absolute_transform.scale
                 tile_location = (
@@ -361,7 +363,8 @@ class TileGrid:
                 if not output_pixel.opaque:
                     full_coverage = False
                 else:
-                    mask[offset // 32] |= 1 << (offset % 32)
+                    mask[offset // 8] |= 1 << (offset % 8)
+                    # print("Mask", mask)
                     if colorspace.depth == 16:
                         struct.pack_into(
                             "H",
@@ -440,7 +443,7 @@ class TileGrid:
         if isinstance(self._bitmap, Bitmap):
             self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
             refresh_area = areas[-1] if areas else None
-            if tail != refresh_area:
+            if refresh_area != tail:
                 # Special case a TileGrid that shows a full bitmap and use its
                 # dirty area. Copy it to ours so we can transform it.
                 if self._tiles_in_bitmap == 1:
@@ -528,6 +531,29 @@ class TileGrid:
             (self._width_in_tiles * self._height_in_tiles) * [tile_index]
         )
         self._full_change = True
+
+    def _set_tile(self, x: int, y: int, tile_index: int) -> None:
+        self._tiles[y * self._width_in_tiles + x] = tile_index
+        temp_area = Area()
+        if not self._partial_change:
+            tile_area = self._dirty_area
+        else:
+            tile_area = temp_area
+        top_x = (x - self._top_left_x) % self._width_in_tiles
+        if top_x < 0:
+            top_x += self._width_in_tiles
+        tile_area.x1 = top_x * self._tile_width
+        tile_area.x2 = tile_area.x1 + self._tile_width
+        top_y = (y - self._top_left_y) % self._height_in_tiles
+        if top_y < 0:
+            top_y += self._height_in_tiles
+        tile_area.y1 = top_y * self._tile_height
+        tile_area.y2 = tile_area.y1 + self._tile_height
+
+        if self._partial_change:
+            self._dirty_area.union(temp_area, self._dirty_area)
+
+        self._partial_change = True
 
     def _set_top_left(self, x: int, y: int) -> None:
         self._top_left_x = x
@@ -679,23 +705,23 @@ class TileGrid:
             or index >= len(self._tiles)
         ):
             raise ValueError("Tile index out of bounds")
-        return index
+        return x, y
 
     def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
         """Returns the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``'.
         """
-        index = self._extract_and_check_index(index)
-        return self._tiles[index]
+        x, y = self._extract_and_check_index(index)
+        return self._tiles[y * self._width_in_tiles + x]
 
     def __setitem__(self, index: Union[Tuple[int, int], int], value: int) -> None:
         """Sets the tile index at the given index. The index can either be
         an x,y tuple or an int equal to ``y * width + x``.
         """
-        index = self._extract_and_check_index(index)
+        x, y = self._extract_and_check_index(index)
         if not 0 <= value <= 255:
             raise ValueError("Tile value out of bounds")
-        self._tiles[index] = value
+        self._set_tile(x, y, value)
 
     @property
     def width(self) -> int:
