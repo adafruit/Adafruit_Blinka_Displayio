@@ -113,7 +113,7 @@ class Bitmap:
             self._x_shift += 1
             power_of_two = power_of_two << 1
 
-        self._x_mask = (1 << self._x_shift) - 1  # UUsed as a modulus on the x value
+        self._x_mask = (1 << self._x_shift) - 1  # Used as a modulus on the x value
         self._bitmask = (1 << bits_per_value) - 1
         self._dirty_area = Area(0, 0, width, height)
 

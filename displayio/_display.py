@@ -27,7 +27,7 @@ from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from ._displaycore import _DisplayCore
 from ._displaybus import _DisplayBus
 from ._colorconverter import ColorConverter
-from ._group import Group
+from ._group import Group, circuitpython_splash
 from ._area import Area
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
@@ -157,11 +157,10 @@ class Display:
         self._auto_refresh = auto_refresh
 
         self._initialize(init_sequence)
+
         self._current_group = None
         self._last_refresh_call = 0
         self._refresh_thread = None
-        if self._auto_refresh:
-            self.auto_refresh = True
         self._colorconverter = ColorConverter()
 
         self._backlight_type = None
@@ -179,7 +178,10 @@ class Display:
                 self._backlight_type = BACKLIGHT_IN_OUT
                 self._backlight = digitalio.DigitalInOut(backlight_pin)
                 self._backlight.switch_to_output()
-            self.brightness = brightness
+        self.brightness = brightness
+        if not circuitpython_splash._in_group:
+            self._set_root_group(circuitpython_splash)
+        self.auto_refresh = auto_refresh
 
     def __new__(cls, *args, **kwargs):
         from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
@@ -235,7 +237,14 @@ class Display:
         """Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
         """
-        self._core.show(group)
+        if group is None:
+            group = circuitpython_splash
+        self._core.set_root_group(group)
+
+    def _set_root_group(self, root_group: Group) -> None:
+        ok = self._core.set_root_group(root_group)
+        if not ok:
+            raise ValueError("Group already used")
 
     def refresh(
         self,
@@ -323,6 +332,8 @@ class Display:
         buffer_size = 128
 
         clipped = Area()
+        # Clip the area to the display by overlapping the areas.
+        # If there is no overlap then we're done.
         if not self._core.clip_area(area, clipped):
             return True
 
@@ -331,7 +342,8 @@ class Display:
         pixels_per_buffer = clipped.size()
 
         subrectangles = 1
-
+        # for SH1107 and other boundary constrained controllers
+        #      write one single row at a time
         if self._core.sh1107_addressing:
             subrectangles = rows_per_buffer // 8
             rows_per_buffer = 8
@@ -339,6 +351,7 @@ class Display:
             rows_per_buffer = buffer_size * pixels_per_word // clipped.width()
             if rows_per_buffer == 0:
                 rows_per_buffer = 1
+            # If pixels are packed by column then ensure rows_per_buffer is on a byte boundary
             if (
                 self._core.colorspace.depth < 8
                 and self._core.colorspace.pixels_in_byte_share_row
@@ -354,6 +367,7 @@ class Display:
             if pixels_per_buffer % pixels_per_word:
                 buffer_size += 1
 
+        # TODO: Optimize with memoryview
         buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
         mask_length = (pixels_per_buffer // 32) + 1
         mask = array("L", [0] * mask_length)
@@ -368,6 +382,7 @@ class Display:
             )
             if remaining_rows < rows_per_buffer:
                 subrectangle.y2 = subrectangle.y1 + remaining_rows
+            remaining_rows -= rows_per_buffer
             self._core.set_region_to_update(subrectangle)
             if self._core.colorspace.depth >= 8:
                 subrectangle_size_bytes = subrectangle.size() * (
@@ -379,7 +394,6 @@ class Display:
                 )
 
             self._core.fill_area(subrectangle, mask, buffer)
-
             self._core.begin_transaction()
             self._send_pixels(buffer[:subrectangle_size_bytes])
             self._core.end_transaction()
@@ -411,6 +425,10 @@ class Display:
     def reset(self) -> None:
         """Reset the display"""
         self.auto_refresh = True
+        circuitpython_splash.x = 0
+        circuitpython_splash.y = 0
+        if not circuitpython_splash._in_group:  # pylint: disable=protected-access
+            self._set_root_group(circuitpython_splash)
 
     @property
     def auto_refresh(self) -> bool:

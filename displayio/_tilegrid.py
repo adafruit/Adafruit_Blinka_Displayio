@@ -338,14 +338,14 @@ class TileGrid:
                         struct.pack_into(
                             "H",
                             buffer,
-                            offset,
+                            offset * 2,
                             output_pixel.pixel,
                         )
                     elif colorspace.depth == 32:
                         struct.pack_into(
                             "I",
                             buffer,
-                            offset,
+                            offset * 4,
                             output_pixel.pixel,
                         )
                     elif colorspace.depth == 8:
@@ -477,6 +477,21 @@ class TileGrid:
                 )
             areas.append(self._dirty_area)
 
+    def _set_hidden(self, hidden: bool) -> None:
+        self._hidden_tilegrid = hidden
+        self._rendered_hidden = False
+        if not hidden:
+            self._full_change = True
+
+    def _set_hidden_by_parent(self, hidden: bool) -> None:
+        self._hidden_by_parent = hidden
+        self._rendered_hidden = False
+        if not hidden:
+            self._full_change = True
+
+    def _get_rendered_hidden(self) -> bool:
+        return self._rendered_hidden
+
     @property
     def hidden(self) -> bool:
         """True when the TileGrid is hidden. This may be False even
@@ -487,7 +502,8 @@ class TileGrid:
     def hidden(self, value: bool):
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
-        self._hidden_tilegrid = bool(value)
+        value = bool(value)
+        self._set_hidden(value)
 
     @property
     def x(self) -> int:

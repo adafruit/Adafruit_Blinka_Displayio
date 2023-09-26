@@ -30,6 +30,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class Group:
+    # pylint: disable=too-many-instance-attributes
     """
     Manage a group of sprites and groups and how they are inter-related.
 
@@ -50,6 +51,7 @@ class Group:
         self._group_x = x
         self._group_y = y
         self._hidden_group = False
+        self._hidden_by_parent = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
         self._in_group = False
@@ -154,7 +156,6 @@ class Group:
     ) -> bool:
         if self._hidden_group:
             return False
-
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
                 if layer._fill_area(  # pylint: disable=protected-access
@@ -173,10 +174,33 @@ class Group:
                 layer._finish_refresh()  # pylint: disable=protected-access
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
+        # pylint: disable=protected-access
+        for layer in self._layers:
+            if isinstance(layer, Group):
+                layer._get_refresh_areas(areas)
+            elif isinstance(layer, TileGrid):
+                if not layer._get_rendered_hidden():
+                    layer._get_refresh_areas(areas)
+
+    def _set_hidden(self, hidden: bool) -> None:
+        if self._hidden_group == hidden:
+            return
+        self._hidden_group = hidden
+        if self._hidden_by_parent:
+            return
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
-                if not layer.hidden:
-                    layer._get_refresh_areas(areas)  # pylint: disable=protected-access
+                layer._set_hidden_by_parent(hidden)  # pylint: disable=protected-access
+
+    def _set_hidden_by_parent(self, hidden: bool) -> None:
+        if self._hidden_by_parent == hidden:
+            return
+        self._hidden_by_parent = hidden
+        if self._hidden_group:
+            return
+        for layer in self._layers:
+            if isinstance(layer, (Group, TileGrid)):
+                layer._set_hidden_by_parent(hidden)  # pylint: disable=protected-access
 
     @property
     def hidden(self) -> bool:
@@ -186,10 +210,11 @@ class Group:
         return self._hidden_group
 
     @hidden.setter
-    def hidden(self, value: bool):
+    def hidden(self, value: bool) -> None:
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
-        self._hidden_group = bool(value)
+        value = bool(value)
+        self._set_hidden(value)
 
     @property
     def scale(self) -> int:
@@ -257,3 +282,6 @@ class Group:
                 self._absolute_transform.y += dy_value * (value - self._group_y)
             self._group_y = value
             self._update_child_transforms()
+
+
+circuitpython_splash = Group(scale=2, x=0, y=0)

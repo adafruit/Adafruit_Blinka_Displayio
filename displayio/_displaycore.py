@@ -178,25 +178,14 @@ class _DisplayCore:
         if self.current_group is not None:
             self.current_group._update_transform(self.transform)
 
-    def show(self, root_group: Group) -> bool:
-        # pylint: disable=protected-access
-
+    def set_root_group(self, root_group: Group) -> bool:
         """
         Switches to displaying the given group of layers. When group is `None`, the
         default CircuitPython terminal will be shown.
 
         :param Optional[displayio.Group] root_group: The group to show.
         """
-
-        """
-        # TODO: Implement Supervisor
-        if root_group is None:
-            circuitpython_splash = _Supervisor().circuitpython_splash
-            if not circuitpython_splash._in_group:
-                root_group = circuitpython_splash
-            elif self.current_group == circuitpython_splash:
-                return True
-        """
+        # pylint: disable=protected-access
 
         if root_group == self.current_group:
             return True
@@ -405,7 +394,6 @@ class _DisplayCore:
         """
         Send the data to the current bus
         """
-        # print(data_type, chip_select, data)
         self._send(data_type, chip_select, data)
 
     def begin_transaction(self) -> None:

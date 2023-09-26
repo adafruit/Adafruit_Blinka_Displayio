@@ -28,12 +28,17 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class Palette:
-    """Map a pixel palette_index to a full color. Colors are transformed to the display’s
+    """Map a pixel palette_index to a full color. Colors are transformed to the display's
     format internally to save memory.
     """
 
-    def __init__(self, color_count: int, dither: bool = False):
-        """Create a Palette object to store a set number of colors."""
+    def __init__(self, color_count: int, *, dither: bool = False):
+        """Create a Palette object to store a set number of colors.
+
+        :param int color_count: The number of colors in the Palette
+        :param bool dither: When true, dither the RGB color before converting to the
+                            display's color space
+        """
         self._needs_refresh = False
         self._dither = dither
 
@@ -41,7 +46,8 @@ class Palette:
         for _ in range(color_count):
             self._colors.append(self._make_color(0))
 
-    def _make_color(self, value, transparent=False):
+    @staticmethod
+    def _make_color(value, transparent=False):
         color = ColorStruct(transparent=transparent)
 
         if isinstance(value, (tuple, list, bytes, bytearray)):
@@ -52,7 +58,6 @@ class Palette:
         else:
             raise TypeError("Color buffer must be a buffer, tuple, list, or int")
         color.rgb888 = value
-        self._needs_refresh = True
 
         return color
 
@@ -72,8 +77,11 @@ class Palette:
         (to represent an RGB value). Value can be an int, bytes (3 bytes (RGB) or
         4 bytes (RGB + pad byte)), bytearray, or a tuple or list of 3 integers.
         """
-        if self._colors[index].rgb888 != value:
-            self._colors[index] = self._make_color(value)
+        if self._colors[index].rgb888 == value:
+            return
+        self._colors[index] = self._make_color(value)
+        self._colors[index].cached_colorspace = None
+        self._needs_refresh = True
 
     def __getitem__(self, index: int) -> Optional[int]:
         if not 0 <= index < len(self._colors):
@@ -83,10 +91,12 @@ class Palette:
     def make_transparent(self, palette_index: int) -> None:
         """Set the palette index to be a transparent color"""
         self._colors[palette_index].transparent = True
+        self._needs_refresh = True
 
     def make_opaque(self, palette_index: int) -> None:
         """Set the palette index to be an opaque color"""
         self._colors[palette_index].transparent = False
+        self._needs_refresh = True
 
     def _get_palette(self):
         """Generate a palette for use with PIL"""
@@ -126,6 +136,7 @@ class Palette:
             return
 
         rgb888_pixel = input_pixel
+        rgb888_pixel.pixel = self._colors[palette_index].rgb888
         ColorConverter._convert_color(  # pylint: disable=protected-access
             colorspace, self._dither, rgb888_pixel, output_color
         )
@@ -140,7 +151,7 @@ class Palette:
         return self._colors[palette_index].transparent
 
     def _finish_refresh(self):
-        pass
+        self._needs_refresh = False
 
     @property
     def dither(self) -> bool:
