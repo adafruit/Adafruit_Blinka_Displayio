@@ -400,6 +400,7 @@ class TileGrid:
                             # Reverse the shift by subtracting it from the leftmost shift
                             shift = (pixels_per_byte - 1) * colorspace.depth - shift
                         buffer[offset // pixels_per_byte] |= output_pixel.pixel << shift
+
         return full_coverage
 
     def _finish_refresh(self):

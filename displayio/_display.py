@@ -328,7 +328,6 @@ class Display:
     def _refresh_area(self, area) -> bool:
         """Loop through dirty areas and redraw that area."""
         # pylint: disable=too-many-locals
-        buffer_size = 128
 
         clipped = Area()
         # Clip the area to the display by overlapping the areas.
@@ -339,6 +338,9 @@ class Display:
         rows_per_buffer = clipped.height()
         pixels_per_word = 32 // self._core.colorspace.depth
         pixels_per_buffer = clipped.size()
+
+        # We should have lots of memory
+        buffer_size = clipped.size() // pixels_per_word
 
         subrectangles = 1
         # for SH1107 and other boundary constrained controllers
