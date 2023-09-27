@@ -397,11 +397,11 @@ class _DisplayCore:
         """
         self._send(data_type, chip_select, data)
 
-    def begin_transaction(self) -> None:
+    def begin_transaction(self) -> bool:
         """
         Begin Bus Transaction
         """
-        self._begin_transaction()
+        return self._begin_transaction()
 
     def end_transaction(self) -> None:
         """

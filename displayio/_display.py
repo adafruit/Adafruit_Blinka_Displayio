@@ -36,6 +36,7 @@ from ._constants import (
     BACKLIGHT_IN_OUT,
     BACKLIGHT_PWM,
     NO_COMMAND,
+    DELAY,
 )
 
 __version__ = "0.0.0+auto.0"
@@ -43,7 +44,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class Display:
-    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-instance-attributes, too-many-statements
     """This initializes a display and connects it into CircuitPython. Unlike other objects
     in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
     This is done so that CircuitPython can use the display itself.
@@ -155,7 +156,42 @@ class Display:
         self._brightness = brightness
         self._auto_refresh = auto_refresh
 
-        self._initialize(init_sequence)
+        i = 0
+        while i < len(init_sequence):
+            command = init_sequence[i]
+            data_size = init_sequence[i + 1]
+            delay = (data_size & DELAY) != 0
+            data_size &= ~DELAY
+            while self._core.begin_transaction():
+                pass
+
+            if self._core.data_as_commands:
+                full_command = bytearray(data_size + 1)
+                full_command[0] = command
+                full_command[1:] = init_sequence[i + 2 : i + 2 + data_size]
+                self._core.send(
+                    DISPLAY_COMMAND,
+                    CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                    full_command,
+                )
+            else:
+                self._core.send(
+                    DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
+                )
+                self._core.send(
+                    DISPLAY_DATA,
+                    CHIP_SELECT_UNTOUCHED,
+                    init_sequence[i + 2 : i + 2 + data_size],
+                )
+            self._core.end_transaction()
+            delay_time_ms = 10
+            if delay:
+                data_size += 1
+                delay_time_ms = init_sequence[i + 1 + data_size]
+                if delay_time_ms == 255:
+                    delay_time_ms = 500
+            time.sleep(delay_time_ms / 1000)
+            i += 2 + data_size
 
         self._current_group = None
         self._last_refresh_call = 0
@@ -190,38 +226,6 @@ class Display:
         display_instance = super().__new__(cls)
         allocate_display(display_instance)
         return display_instance
-
-    def _initialize(self, init_sequence):
-        i = 0
-        while i < len(init_sequence):
-            command = init_sequence[i]
-            data_size = init_sequence[i + 1]
-            delay = (data_size & 0x80) > 0
-            data_size &= ~0x80
-
-            if self._core.data_as_commands:
-                self._core.send(
-                    DISPLAY_COMMAND,
-                    CHIP_SELECT_TOGGLE_EVERY_BYTE,
-                    bytes([command]) + init_sequence[i + 2 : i + 2 + data_size],
-                )
-            else:
-                self._core.send(
-                    DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
-                )
-                self._core.send(
-                    DISPLAY_DATA,
-                    CHIP_SELECT_UNTOUCHED,
-                    init_sequence[i + 2 : i + 2 + data_size],
-                )
-            delay_time_ms = 10
-            if delay:
-                data_size += 1
-                delay_time_ms = init_sequence[i + 1 + data_size]
-                if delay_time_ms == 255:
-                    delay_time_ms = 500
-            time.sleep(delay_time_ms / 1000)
-            i += 2 + data_size
 
     def _send_pixels(self, pixels):
         if not self._core.data_as_commands:
@@ -455,23 +459,24 @@ class Display:
             elif self._backlight_type == BACKLIGHT_IN_OUT:
                 self._backlight.value = value > 0.99
             elif self._brightness_command is not None:
-                self._core.begin_transaction()
-                if self._core.data_as_commands:
-                    self._core.send(
-                        DISPLAY_COMMAND,
-                        CHIP_SELECT_TOGGLE_EVERY_BYTE,
-                        bytes([self._brightness_command, round(0xFF * value)]),
-                    )
-                else:
-                    self._core.send(
-                        DISPLAY_COMMAND,
-                        CHIP_SELECT_TOGGLE_EVERY_BYTE,
-                        bytes([self._brightness_command]),
-                    )
-                    self._core.send(
-                        DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, round(value * 255)
-                    )
-                self._core.end_transaction()
+                okay = self._core.begin_transaction()
+                if okay:
+                    if self._core.data_as_commands:
+                        self._core.send(
+                            DISPLAY_COMMAND,
+                            CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                            bytes([self._brightness_command, round(0xFF * value)]),
+                        )
+                    else:
+                        self._core.send(
+                            DISPLAY_COMMAND,
+                            CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                            bytes([self._brightness_command]),
+                        )
+                        self._core.send(
+                            DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, round(value * 255)
+                        )
+                    self._core.end_transaction()
             self._brightness = value
         else:
             raise ValueError("Brightness must be between 0.0 and 1.0")

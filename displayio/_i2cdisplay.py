@@ -80,10 +80,9 @@ class I2CDisplay:
         time.sleep(0.0001)
         self._reset.value = True
 
-    def _begin_transaction(self) -> None:
+    def _begin_transaction(self) -> bool:
         """Lock the bus before sending data."""
-        while not self._i2c.try_lock():
-            pass
+        return self._i2c.try_lock()
 
     def send(self, command: int, data: ReadableBuffer) -> None:
         """
@@ -109,12 +108,26 @@ class I2CDisplay:
                     command_bytes[2 * i] = 0x80
                     command_bytes[2 * i + 1] = data[i]
 
+            try:
                 self._i2c.writeto(self._dev_addr, buffer=command_bytes)
+            except OSError as error:
+                if error.errno == 121:
+                    raise RuntimeError(
+                        f"I2C write error to 0x{self._dev_addr:02x}"
+                    ) from error
+                raise error
         else:
             data_bytes = bytearray(len(data) + 1)
             data_bytes[0] = 0x40
             data_bytes[1:] = data
-            self._i2c.writeto(self._dev_addr, buffer=data_bytes)
+            try:
+                self._i2c.writeto(self._dev_addr, buffer=data_bytes)
+            except OSError as error:
+                if error.errno == 121:
+                    raise RuntimeError(
+                        f"I2C write error to 0x{self._dev_addr:02x}"
+                    ) from error
+                raise error
 
     def _end_transaction(self) -> None:
         """Release the bus after sending data."""
