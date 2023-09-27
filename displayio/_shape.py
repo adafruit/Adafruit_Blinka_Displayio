@@ -18,7 +18,6 @@ displayio for Blinka
 
 """
 
-import struct
 from ._bitmap import Bitmap
 from ._area import Area
 from ._helpers import clamp
@@ -52,7 +51,7 @@ class Shape(Bitmap):
             height //= 2
             height += self._height % 2
         self._half_height = height
-        self._data = bytearray(height * struct.calcsize("HH"))
+        self._data = bytearray(height * 4)
         for i in range(height):
             self._data[2 * i] = 0
             self._data[2 * i + 1] = width

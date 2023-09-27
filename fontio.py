@@ -17,6 +17,7 @@ fontio for Blinka
 
 """
 
+import os
 from typing import Union, Tuple, Optional
 from PIL import ImageFont
 from displayio import Bitmap
@@ -28,6 +29,8 @@ except ImportError:
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+DEFAULT_FONT = "displayio/resources/ter-u12n.pil"
 
 
 class FontProtocol(Protocol):
@@ -52,7 +55,7 @@ class BuiltinFont:
     """Simulate a font built into CircuitPython"""
 
     def __init__(self):
-        self._font = ImageFont.load_default()
+        self._font = ImageFont.load(os.path.dirname(__file__) + "/" + DEFAULT_FONT)
         self._generate_bitmap(0x20, 0x7E)
 
     def _generate_bitmap(self, start_range, end_range):

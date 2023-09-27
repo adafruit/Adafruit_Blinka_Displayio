@@ -18,7 +18,6 @@ displayio for Blinka
 """
 
 import time
-import struct
 from array import array
 from typing import Optional
 import digitalio
@@ -338,7 +337,7 @@ class Display:
             return True
 
         rows_per_buffer = clipped.height()
-        pixels_per_word = (struct.calcsize("I") * 8) // self._core.colorspace.depth
+        pixels_per_word = 32 // self._core.colorspace.depth
         pixels_per_buffer = clipped.size()
 
         subrectangles = 1
@@ -366,8 +365,6 @@ class Display:
             buffer_size = pixels_per_buffer // pixels_per_word
             if pixels_per_buffer % pixels_per_word:
                 buffer_size += 1
-
-        # TODO: Optimize with memoryview
         mask_length = (pixels_per_buffer // 8) + 1  # 1 bit per pixel + 1
         remaining_rows = clipped.height()
 
@@ -391,8 +388,8 @@ class Display:
                     8 // self._core.colorspace.depth
                 )
 
-            buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
-            mask = bytearray([0] * mask_length)
+            buffer = memoryview(bytearray([0] * (buffer_size * 4)))
+            mask = memoryview(bytearray([0] * mask_length))
             self._core.fill_area(subrectangle, mask, buffer)
             self._core.begin_transaction()
             self._send_pixels(buffer[:subrectangle_size_bytes])
@@ -405,13 +402,13 @@ class Display:
             raise ValueError("Display must have a 16 bit colorspace.")
 
         area = Area(0, y, self._core.width, y + 1)
-        pixels_per_word = (struct.calcsize("I") * 8) // self._core.colorspace.depth
+        pixels_per_word = 32 // self._core.colorspace.depth
         buffer_size = self._core.width // pixels_per_word
         pixels_per_buffer = area.size()
         if pixels_per_buffer % pixels_per_word:
             buffer_size += 1
 
-        buffer = bytearray([0] * (buffer_size * struct.calcsize("I")))
+        buffer = bytearray([0] * (buffer_size * 4))
         mask_length = (pixels_per_buffer // 32) + 1
         mask = array("L", [0x00000000] * mask_length)
         self._core.fill_area(area, mask, buffer)

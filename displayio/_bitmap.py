@@ -27,13 +27,11 @@ from ._area import Area
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-ALIGN_BITS = 8 * struct.calcsize("I")
-
 
 def stride(width: int, bits_per_pixel: int) -> int:
     """Return the number of bytes per row of a bitmap with the given width and bits per pixel."""
     row_width = width * bits_per_pixel
-    return (row_width + (ALIGN_BITS - 1)) // ALIGN_BITS
+    return (row_width + (31)) // 32
 
 
 class Bitmap:
@@ -109,7 +107,7 @@ class Bitmap:
         self._x_shift = 0
 
         power_of_two = 1
-        while power_of_two < ALIGN_BITS // bits_per_value:
+        while power_of_two < 32 // bits_per_value:
             self._x_shift += 1
             power_of_two = power_of_two << 1
 
@@ -142,11 +140,7 @@ class Bitmap:
         if bytes_per_value < 1:
             word = self._data[row_start + (x >> self._x_shift)]
             return (
-                word
-                >> (
-                    struct.calcsize("I") * 8
-                    - ((x & self._x_mask) + 1) * self._bits_per_value
-                )
+                word >> (32 - ((x & self._x_mask) + 1) * self._bits_per_value)
             ) & self._bitmask
         row = memoryview(self._data)[row_start : row_start + self._stride]
         if bytes_per_value == 1:
@@ -190,10 +184,7 @@ class Bitmap:
         row_start = y * self._stride
         bytes_per_value = self._bits_per_value // 8
         if bytes_per_value < 1:
-            bit_position = (
-                struct.calcsize("I") * 8
-                - ((x & self._x_mask) + 1) * self._bits_per_value
-            )
+            bit_position = 32 - ((x & self._x_mask) + 1) * self._bits_per_value
             index = row_start + (x >> self._x_shift)
             word = self._data[index]
             word &= ~(self._bitmask << bit_position)
