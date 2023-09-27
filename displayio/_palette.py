@@ -98,24 +98,6 @@ class Palette:
         self._colors[palette_index].transparent = False
         self._needs_refresh = True
 
-    """
-    def _get_palette(self):
-        # Generate a palette for use with PIL
-        palette = []
-        for color in self._colors:
-            palette += color.rgba()[0:3]
-        return palette
-
-    def _get_alpha_palette(self):
-        # Generate an alpha channel palette with white being
-        # opaque and black being transparent
-        palette = []
-        for color in self._colors:
-            for _ in range(3):
-                palette += [0 if color.transparent else 0xFF]
-        return palette
-    """
-
     def _get_color(
         self,
         colorspace: Colorspace,

@@ -392,7 +392,7 @@ class TileGrid:
                             # even if we multiply it back out
                             offset = (
                                 col * pixels_per_byte
-                                + (row // pixels_per_byte) * width
+                                + (row // pixels_per_byte) * pixels_per_byte * width
                                 + (row % pixels_per_byte)
                             )
                         shift = (offset % pixels_per_byte) * colorspace.depth

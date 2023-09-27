@@ -460,7 +460,7 @@ class Display:
                     self._core.send(
                         DISPLAY_COMMAND,
                         CHIP_SELECT_TOGGLE_EVERY_BYTE,
-                        bytes([self._brightness_command, 0xFF * value]),
+                        bytes([self._brightness_command, round(0xFF * value)]),
                     )
                 else:
                     self._core.send(
