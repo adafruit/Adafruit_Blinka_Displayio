@@ -101,6 +101,7 @@ class _DisplayCore:
         if bus:
             if isinstance(bus, (FourWire, I2CDisplay, ParallelBus)):
                 self._bus_reset = bus.reset
+                self._bus_free = bus._free
                 self._begin_transaction = bus._begin_transaction
                 self._send = bus._send
                 self._end_transaction = bus._end_transaction
@@ -376,11 +377,13 @@ class _DisplayCore:
         """
         Send the data to the current bus
         """
-        print(len(data))
-        if isinstance(data, memoryview):
-            data = data.tobytes()
-        print(data)
         self._send(data_type, chip_select, data)
+
+    def bus_free(self) -> bool:
+        """
+        Check if the bus is free
+        """
+        return self._bus_free()
 
     def begin_transaction(self) -> bool:
         """

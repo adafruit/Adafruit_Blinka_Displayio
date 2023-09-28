@@ -132,6 +132,13 @@ class FourWire:
         else:
             self._spi.write(data)
 
+    def _free(self) -> bool:
+        """Attempt to free the bus and return False if busy"""
+        if not self._spi.try_lock():
+            return False
+        self._spi.unlock()
+        return True
+
     def _begin_transaction(self) -> bool:
         """Begin the SPI transaction by locking, configuring, and setting Chip Select"""
         if not self._spi.try_lock():

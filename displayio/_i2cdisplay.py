@@ -80,10 +80,6 @@ class I2CDisplay:
         time.sleep(0.0001)
         self._reset.value = True
 
-    def _begin_transaction(self) -> bool:
-        """Lock the bus before sending data."""
-        return self._i2c.try_lock()
-
     def send(self, command: int, data: ReadableBuffer) -> None:
         """
         Sends the given command value followed by the full set of data. Display state,
@@ -128,6 +124,17 @@ class I2CDisplay:
                         f"I2C write error to 0x{self._dev_addr:02x}"
                     ) from error
                 raise error
+
+    def _free(self) -> bool:
+        """Attempt to free the bus and return False if busy"""
+        if not self._i2c.try_lock():
+            return False
+        self._i2c.unlock()
+        return True
+
+    def _begin_transaction(self) -> bool:
+        """Lock the bus before sending data."""
+        return self._i2c.try_lock()
 
     def _end_transaction(self) -> None:
         """Release the bus after sending data."""

@@ -77,9 +77,11 @@ class ParallelBus:
     ) -> None:
         pass
 
+    def _free(self) -> bool:
+        """Attempt to free the bus and return False if busy"""
+
     def _begin_transaction(self) -> bool:
-        # pylint: disable=no-self-use
-        return True
+        pass
 
     def _end_transaction(self) -> None:
         pass
