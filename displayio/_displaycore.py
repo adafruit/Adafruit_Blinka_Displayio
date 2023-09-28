@@ -298,21 +298,21 @@ class _DisplayCore:
 
         # Set column
         self.begin_transaction()
+        data = bytearray([self.column_command])
         data_type = DISPLAY_DATA
         if not self.data_as_commands:
-            self.send(
-                DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([self.column_command])
-            )
+            self.send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, data)
+            data = bytearray(0)
         else:
             data_type = DISPLAY_COMMAND
 
         if self.ram_width < 0x100:  # Single Byte Bounds
-            data = struct.pack(">BB", region_x1, region_x2)
+            data += struct.pack(">BB", region_x1, region_x2)
         else:
             if self.address_little_endian:
                 region_x1 = bswap16(region_x1)
                 region_x2 = bswap16(region_x2)
-            data = struct.pack(">HH", region_x1, region_x2)
+            data += struct.pack(">HH", region_x1, region_x2)
 
         # Quirk for SH1107 "SH1107_addressing"
         #     Column lower command = 0x00, Column upper command = 0x10
@@ -337,17 +337,18 @@ class _DisplayCore:
 
         # Set row
         self.begin_transaction()
+        data = bytearray([self.row_command])
 
         if not self.data_as_commands:
-            self.send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([self.row_command]))
-
+            self.send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, data)
+            data = bytearray(0)
         if self.ram_width < 0x100:  # Single Byte Bounds
-            data = struct.pack(">BB", region_y1, region_y2)
+            data += struct.pack(">BB", region_y1, region_y2)
         else:
             if self.address_little_endian:
                 region_y1 = bswap16(region_y1)
                 region_y2 = bswap16(region_y2)
-            data = struct.pack(">HH", region_y1, region_y2)
+            data += struct.pack(">HH", region_y1, region_y2)
 
         # Quirk for SH1107 "SH1107_addressing"
         #     Page address command = 0xB0
@@ -366,26 +367,6 @@ class _DisplayCore:
             self.send(DISPLAY_DATA, chip_select, data[: len(data) // 2])
             self.end_transaction()
 
-        """
-        img = self._buffer.convert("RGB").crop(astuple(area))
-        img = img.rotate(360 - self._core.rotation, expand=True)
-
-        display_area = self._apply_rotation(area)
-
-        img = img.crop(astuple(display_area))
-
-        data = numpy.array(img).astype("uint16")
-        color = (
-            ((data[:, :, 0] & 0xF8) << 8)
-            | ((data[:, :, 1] & 0xFC) << 3)
-            | (data[:, :, 2] >> 3)
-        )
-
-        pixels = bytes(
-            numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
-        )
-        """
-
     def send(
         self,
         data_type: int,
@@ -395,6 +376,10 @@ class _DisplayCore:
         """
         Send the data to the current bus
         """
+        print(len(data))
+        if isinstance(data, memoryview):
+            data = data.tobytes()
+        print(data)
         self._send(data_type, chip_select, data)
 
     def begin_transaction(self) -> bool:
