@@ -82,7 +82,7 @@ class Display:
         backlight_on_high: bool = True,
         SH1107_addressing: bool = False,
     ):
-        # pylint: disable=too-many-locals,invalid-name
+        # pylint: disable=too-many-locals,invalid-name, too-many-branches
         """Create a Display object on the given display bus (`displayio.FourWire` or
         `paralleldisplay.ParallelBus`).
 
@@ -112,6 +112,13 @@ class Display:
         The initialization sequence should always leave the display memory access inline with
         the scan of the display to minimize tearing artifacts.
         """
+
+        if rotation % 90 != 0:
+            raise ValueError("Display rotation must be in 90 degree increments")
+
+        if SH1107_addressing and color_depth != 1:
+            raise ValueError("color_depth must be 1 when SH1107_addressing is True")
+
         # Turn off auto-refresh as we init
         self._auto_refresh = False
         ram_width = 0x100
@@ -498,6 +505,8 @@ class Display:
 
     @rotation.setter
     def rotation(self, value: int):
+        if value % 90 != 0:
+            raise ValueError("Display rotation must be in 90 degree increments")
         self._core.set_rotation(value)
 
     @property
