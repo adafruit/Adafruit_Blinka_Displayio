@@ -208,9 +208,7 @@ class EPaperDisplay:
         self._black_bits_inverted = black_bits_inverted
         self._write_color_ram_command = write_color_ram_command
         self._color_bits_inverted = color_bits_inverted
-        self._refresh_time = (
-            refresh_time  # TODO: Verify we are using seconds instead of ms
-        )
+        self._refresh_time_ms = refresh_time * 1000
         self._busy_state = busy_state
         self._refreshing = False
         self._milliseconds_per_frame = seconds_per_frame * 1000
@@ -222,9 +220,7 @@ class EPaperDisplay:
         self._grayscale = grayscale
 
         self._start_sequence = start_sequence
-        self._start_up_time = (
-            start_up_time  # TODO: Verify we are using seconds instead of ms
-        )
+        self._start_up_time = start_up_time
         self._stop_sequence = stop_sequence
         self._refesh_sequence = refresh_sequence
         self._busy = None
@@ -262,14 +258,60 @@ class EPaperDisplay:
     ) -> None:
         """Updates the ``start_sequence`` and ``seconds_per_frame`` parameters to enable
         varying the refresh mode of the display."""
-        # TODO: Implement
+        self._start_sequence = bytearray(start_sequence)
+        self._milliseconds_per_frame = seconds_per_frame * 1000
 
     def refresh(self) -> None:
-        # pylint: disable=unnecessary-pass
         """Refreshes the display immediately or raises an exception if too soon. Use
         ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur.
         """
-        # TODO: Implement
+        if not self._refresh():
+            raise RuntimeError("Refresh too soon")
+
+    def _refresh(self) -> bool:
+        if self._refreshing and self._busy is not None:
+            if self._busy.value != self._busy_state:
+                self._refreshing = False
+                self._send_command_sequence(False, self._stop_sequence)
+            else:
+                return False
+        if self._core.current_group is None:
+            return True
+        # Refresh at seconds per frame rate
+        if self.time_to_refresh > 0:
+            return False
+
+        # TODO: Finish Implementing
+        return True
+
+    def _release(self) -> None:
+        """Release the display and free its resources"""
+        if self._refreshing:
+            self._wait_for_busy()
+            self._refreshing = False
+            # Run stop sequence but don't wait for busy because busy is set when sleeping
+            self._send_command_sequence(False, self._stop_sequence)
+        self._core.release_display_core()
+        if self._busy is not None:
+            self._busy.deinit()
+
+    def _background(self):
+        """Run background refresh tasks."""
+        if self._refreshing:
+            refresh_done = False
+            if self._busy is not None:
+                busy = self._busy.value
+                refresh_done = busy == self._busy_state
+            else:
+                refresh_done = (
+                    time.monotonic() * 1000 - self._core.last_refresh
+                    > self._refresh_time
+                )
+            if refresh_done:
+                self._refreshing = False
+                self._finish_refresh()
+                # Run stop sequence but don't wait for busy because busy is set when sleeping
+                self._send_command_sequence(False, self._stop_sequence)
 
     def _get_refresh_areas(self) -> list[Area]:
         """Get a list of areas to be refreshed"""
@@ -287,6 +329,10 @@ class EPaperDisplay:
             # Do a full refresh if the display doesn't support partial updates
             areas = [self._core.area]
         return areas
+
+    def _refresh_areas(self, areas: list[Area]) -> None:
+        """Loop through dirty areas and redraw that area."""
+        # TODO: Implement
 
     def _send_command_sequence(
         self, should_wait_for_busy: bool, sequence: ReadableBuffer
@@ -325,6 +371,13 @@ class EPaperDisplay:
             if self._two_byte_sequence_length:
                 i += 1
 
+    def _start_refresh(self) -> None:
+        # Run start sequence
+        self._core._bus_reset()  # pylint: disable=protected-access
+        time.sleep(self._start_up_time)
+        self._send_command_sequence(True, self._start_sequence)
+        self._core.start_refresh()
+
     def _finish_refresh(self) -> None:
         self._send_command_sequence(False, self._refesh_sequence)
         self._refreshing = True
@@ -353,7 +406,14 @@ class EPaperDisplay:
     @property
     def time_to_refresh(self) -> float:
         """Time, in fractional seconds, until the ePaper display can be refreshed."""
-        return 0.0  # TODO: Implement
+        if self._core.last_refresh == 0:
+            return 0
+
+        # Refresh at seconds per frame rate
+        elapsed_time = time.monotonic() * 1000 - self._core.last_refresh
+        if elapsed_time > self._milliseconds_per_frame:
+            return 0
+        return self._milliseconds_per_frame - elapsed_time
 
     @property
     def busy(self) -> bool:
@@ -374,7 +434,7 @@ class EPaperDisplay:
     @property
     def bus(self) -> _DisplayBus:
         """Current Display Bus"""
-        return self._core._bus
+        return self._core._bus  # pylint: disable=protected-access
 
     @property
     def root_group(self) -> Group:
