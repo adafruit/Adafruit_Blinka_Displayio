@@ -338,7 +338,7 @@ class Display:
 
     def _refresh_area(self, area) -> bool:
         """Loop through dirty areas and redraw that area."""
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-locals, too-many-branches
 
         clipped = Area()
         # Clip the area to the display by overlapping the areas.
@@ -404,6 +404,11 @@ class Display:
             buffer = memoryview(bytearray([0] * (buffer_size * 4)))
             mask = memoryview(bytearray([0] * mask_length))
             self._core.fill_area(subrectangle, mask, buffer)
+
+            # Can't acquire display bus; skip the rest of the data.
+            if not self._core.bus_free():
+                return False
+
             self._core.begin_transaction()
             self._send_pixels(buffer[:subrectangle_size_bytes])
             self._core.end_transaction()
