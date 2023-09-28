@@ -45,7 +45,7 @@ def _background():
     """Main thread function to loop through all displays and update them"""
     while True:
         for display in displays:
-            display.background()
+            display._background()  # pylint: disable=protected-access
 
 
 def release_displays() -> None:
@@ -55,7 +55,7 @@ def release_displays() -> None:
     initialization so the display is active as long as possible.
     """
     for display in displays:
-        display.release()
+        display._release()  # pylint: disable=protected-access
     displays.clear()
 
     for display_bus in display_buses:

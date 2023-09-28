@@ -327,7 +327,7 @@ class Display:
             )
         return areas
 
-    def background(self):
+    def _background(self):
         """Run background refresh tasks. Do not call directly"""
         if (
             self._auto_refresh
@@ -427,12 +427,12 @@ class Display:
         self._core.fill_area(area, mask, buffer)
         return buffer
 
-    def release(self) -> None:
+    def _release(self) -> None:
         """Release the display and free its resources"""
         self.auto_refresh = False
         self._core.release_display_core()
 
-    def reset(self) -> None:
+    def _reset(self) -> None:
         """Reset the display"""
         self.auto_refresh = True
         circuitpython_splash.x = 0
