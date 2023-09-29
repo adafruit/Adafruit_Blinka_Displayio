@@ -14,19 +14,13 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
-import sys
 
 here = path.abspath(path.dirname(__file__))
 
 requirements = [
     "Adafruit-Blinka>=7.0.0",
     "adafruit-circuitpython-typing",
-    "pillow",
-    "numpy",
 ]
-
-if sys.version_info > (3, 9):
-    requirements.append("pillow>=9.2.0")
 
 # Get the long description from the README file
 with open(path.join(here, "README.rst"), encoding="utf-8") as f:
