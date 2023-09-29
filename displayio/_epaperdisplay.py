@@ -41,7 +41,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class EPaperDisplay:
-    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-instance-attributes, too-many-statements
     """Manage updating an epaper display over a display bus
 
     This initializes an epaper display and connects it into CircuitPython. Unlike other
@@ -281,7 +281,27 @@ class EPaperDisplay:
         if self.time_to_refresh > 0:
             return False
 
-        # TODO: Finish Implementing
+        if not self._core.bus_free():
+            # Can't acquire display bus; skip updating this display. Try next display
+            return False
+
+        areas_to_refresh = self._get_refresh_areas()
+        if not areas_to_refresh:
+            return True
+
+        if self._acep:
+            self._start_refresh()
+            self._clean_area()
+            self._finish_refresh()
+            while self._refreshing:
+                # TODO: Add something here that can change self._refreshing
+                pass
+
+        self._start_refresh()
+        for area in areas_to_refresh:
+            self._refresh_area(area)
+        self._core.finish_refresh()
+
         return True
 
     def _release(self) -> None:
@@ -295,7 +315,7 @@ class EPaperDisplay:
         if self._busy is not None:
             self._busy.deinit()
 
-    def _background(self):
+    def _background(self) -> None:
         """Run background refresh tasks."""
         if self._refreshing:
             refresh_done = False
@@ -330,9 +350,102 @@ class EPaperDisplay:
             areas = [self._core.area]
         return areas
 
-    def _refresh_areas(self, areas: list[Area]) -> None:
-        """Loop through dirty areas and redraw that area."""
-        # TODO: Implement
+    def _refresh_area(self, area: Area) -> bool:
+        """Redraw the area."""
+        # pylint: disable=too-many-locals, too-many-branches
+
+        clipped = Area()
+        # Clip the area to the display by overlapping the areas.
+        # If there is no overlap then we're done.
+        if not self._core.clip_area(area, clipped):
+            return True
+
+        subrectangles = 1
+        rows_per_buffer = clipped.height()
+        pixels_per_word = 32 // self._core.colorspace.depth
+        pixels_per_buffer = clipped.size()
+
+        # We should have lots of memory
+        buffer_size = clipped.size() // pixels_per_word
+
+        if clipped.size() > buffer_size * pixels_per_word:
+            rows_per_buffer = buffer_size * pixels_per_word // clipped.width()
+            if rows_per_buffer == 0:
+                rows_per_buffer = 1
+            subrectangles = clipped.height() // rows_per_buffer
+            if clipped.height() % rows_per_buffer != 0:
+                subrectangles += 1
+            pixels_per_buffer = rows_per_buffer * clipped.width()
+            buffer_size = pixels_per_buffer // pixels_per_word
+            if pixels_per_buffer % pixels_per_word:
+                buffer_size += 1
+
+        mask_length = (pixels_per_buffer // 8) + 1  # 1 bit per pixel + 1
+
+        passes = 1
+        if self._write_color_ram_command != NO_COMMAND:
+            passes = 2
+        for pass_index in range(passes):
+            remaining_rows = clipped.height()
+            if self._core.row_command != NO_COMMAND:
+                self._core.set_region_to_update(clipped)
+
+            write_command = self._write_black_ram_command
+            if pass_index == 1:
+                write_command = self._write_color_ram_command
+
+            self._core.begin_transaction()
+            self._core.send(DISPLAY_COMMAND, self._chip_select, bytes([write_command]))
+            self._core.end_transaction()
+
+            for subrect_index in range(subrectangles):
+                subrectangle = Area(
+                    clipped.x1,
+                    clipped.y1 + rows_per_buffer * subrect_index,
+                    clipped.x2,
+                    clipped.y1 + rows_per_buffer * (subrect_index + 1),
+                )
+                if remaining_rows < rows_per_buffer:
+                    subrectangle.y2 = subrectangle.y1 + remaining_rows
+                remaining_rows -= rows_per_buffer
+
+                subrectangle_size_bytes = subrectangle.size() // (
+                    8 // self._core.colorspace.depth
+                )
+
+                buffer = memoryview(bytearray([0] * (buffer_size * 4)))
+                mask = memoryview(bytearray([0] * mask_length))
+
+                if not self._acep:
+                    self._core.colorspace.grayscale = True
+                    self._core.colorspace.grayscale_bit = 7
+                if pass_index == 1:
+                    if self._grayscale:  # 4-color grayscale
+                        self._core.colorspace.grayscale_bit = 6
+                        self._core.fill_area(subrectangle, mask, buffer)
+                    elif self._core.colorspace.tricolor:
+                        self._core.colorspace.grayscale = False
+                        self._core.fill_area(subrectangle, mask, buffer)
+                    elif self._core.colorspace.sevencolor:
+                        self._core.fill_area(subrectangle, mask, buffer)
+                else:
+                    self._core.fill_area(subrectangle, mask, buffer)
+
+                # Invert it all
+                if (pass_index == 1 and self._color_bits_inverted) or (
+                    pass_index == 0 and self._black_bits_inverted
+                ):
+                    for i, _ in enumerate(buffer):
+                        buffer[i] = ~buffer[i]
+
+                if not self._core.begin_transaction():
+                    # Can't acquire display bus; skip the rest of the data. Try next display.
+                    return False
+                self._core.send(
+                    DISPLAY_DATA, self._chip_select, buffer[:subrectangle_size_bytes]
+                )
+                self._core.end_transaction()
+        return True
 
     def _send_command_sequence(
         self, should_wait_for_busy: bool, sequence: ReadableBuffer
@@ -379,6 +492,7 @@ class EPaperDisplay:
         self._core.start_refresh()
 
     def _finish_refresh(self) -> None:
+        # Actually refresh the display now that all pixel RAM has been updated
         self._send_command_sequence(False, self._refesh_sequence)
         self._refreshing = True
         self._core.finish_refresh()
@@ -387,6 +501,23 @@ class EPaperDisplay:
         if self._busy is not None:
             while self._busy.value != self._busy_state:
                 time.sleep(0.001)
+
+    def _clean_area(self) -> bool:
+        width = self._core.width
+        height = self._core.height
+
+        buffer = bytearray([0x77] * (width // 2))
+        self._core.begin_transaction()
+        self._core.send(
+            DISPLAY_COMMAND, self._chip_select, bytes([self._write_black_ram_command])
+        )
+        self._core.end_transaction()
+        for _ in range(height):
+            if not self._core.begin_transaction():
+                return False
+            self._core.send(DISPLAY_DATA, self._chip_select, buffer)
+            self._core.end_transaction()
+        return True
 
     @property
     def rotation(self) -> int:
@@ -434,7 +565,7 @@ class EPaperDisplay:
     @property
     def bus(self) -> _DisplayBus:
         """Current Display Bus"""
-        return self._core._bus  # pylint: disable=protected-access
+        return self._core.get_bus()
 
     @property
     def root_group(self) -> Group:
