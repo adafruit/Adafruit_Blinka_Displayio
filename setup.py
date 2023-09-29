@@ -22,7 +22,6 @@ requirements = [
     "Adafruit-Blinka>=7.0.0",
     "adafruit-circuitpython-typing",
     "pillow",
-    "numpy",
 ]
 
 if sys.version_info > (3, 9):

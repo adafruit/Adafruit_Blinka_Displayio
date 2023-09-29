@@ -22,7 +22,7 @@ from typing import Optional
 import digitalio
 import busio
 import microcontroller
-import circuitpython_typing
+from circuitpython_typing import ReadableBuffer
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
@@ -95,7 +95,7 @@ class FourWire:
     def send(
         self,
         command,
-        data: circuitpython_typing.ReadableBuffer,
+        data: ReadableBuffer,
         *,
         toggle_every_byte: bool = False,
     ) -> None:
@@ -120,7 +120,7 @@ class FourWire:
         self,
         data_type: int,
         chip_select: int,
-        data: circuitpython_typing.ReadableBuffer,
+        data: ReadableBuffer,
     ):
         self._dc.value = data_type == DISPLAY_DATA
         if chip_select == CHIP_SELECT_TOGGLE_EVERY_BYTE:
@@ -132,16 +132,24 @@ class FourWire:
         else:
             self._spi.write(data)
 
-    def _begin_transaction(self):
+    def _free(self) -> bool:
+        """Attempt to free the bus and return False if busy"""
+        if not self._spi.try_lock():
+            return False
+        self._spi.unlock()
+        return True
+
+    def _begin_transaction(self) -> bool:
         """Begin the SPI transaction by locking, configuring, and setting Chip Select"""
-        while not self._spi.try_lock():
-            pass
+        if not self._spi.try_lock():
+            return False
         self._spi.configure(
             baudrate=self._frequency, polarity=self._polarity, phase=self._phase
         )
         self._chip_select.value = False
+        return True
 
-    def _end_transaction(self):
+    def _end_transaction(self) -> None:
         """End the SPI transaction by unlocking and setting Chip Select"""
         self._chip_select.value = True
         self._spi.unlock()

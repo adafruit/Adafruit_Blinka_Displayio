@@ -19,14 +19,18 @@ displayio for Blinka
 
 from __future__ import annotations
 from typing import Union, Callable
+from circuitpython_typing import WriteableBuffer
 from ._structs import TransformStruct
 from ._tilegrid import TileGrid
+from ._colorspace import Colorspace
+from ._area import Area
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class Group:
+    # pylint: disable=too-many-instance-attributes
     """
     Manage a group of sprites and groups and how they are inter-related.
 
@@ -44,12 +48,15 @@ class Group:
         if not isinstance(scale, int) or scale < 1:
             raise ValueError("Scale must be >= 1")
         self._scale = 1  # Use the setter below to actually set the scale
+        self._name = "Group"
         self._group_x = x
         self._group_y = y
         self._hidden_group = False
+        self._hidden_by_parent = False
         self._layers = []
         self._supported_types = (TileGrid, Group)
         self._in_group = False
+        self._item_removed = False
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
         self._set_scale(scale)  # Set the scale via the setter
 
@@ -141,22 +148,59 @@ class Group:
         """Deletes the value at the given index."""
         del self._layers[index]
 
-    def _fill_area(self, buffer):
-        if self._hidden_group:
-            return
-
-        for layer in self._layers:
-            if isinstance(layer, (Group, TileGrid)):
-                layer._fill_area(buffer)  # pylint: disable=protected-access
+    def _fill_area(
+        self,
+        colorspace: Colorspace,
+        area: Area,
+        mask: WriteableBuffer,
+        buffer: WriteableBuffer,
+    ) -> bool:
+        if not self._hidden_group:
+            for layer in reversed(self._layers):
+                if isinstance(layer, (Group, TileGrid)):
+                    if layer._fill_area(  # pylint: disable=protected-access
+                        colorspace, area, mask, buffer
+                    ):
+                        return True
+        return False
 
     def sort(self, key: Callable, reverse: bool) -> None:
         """Sort the members of the group."""
         self._layers.sort(key=key, reverse=reverse)
 
     def _finish_refresh(self):
-        for layer in self._layers:
+        for layer in reversed(self._layers):
             if isinstance(layer, (Group, TileGrid)):
                 layer._finish_refresh()  # pylint: disable=protected-access
+
+    def _get_refresh_areas(self, areas: list[Area]) -> None:
+        # pylint: disable=protected-access
+        for layer in reversed(self._layers):
+            if isinstance(layer, Group):
+                layer._get_refresh_areas(areas)
+            elif isinstance(layer, TileGrid):
+                if not layer._get_rendered_hidden():
+                    layer._get_refresh_areas(areas)
+
+    def _set_hidden(self, hidden: bool) -> None:
+        if self._hidden_group == hidden:
+            return
+        self._hidden_group = hidden
+        if self._hidden_by_parent:
+            return
+        for layer in self._layers:
+            if isinstance(layer, (Group, TileGrid)):
+                layer._set_hidden_by_parent(hidden)  # pylint: disable=protected-access
+
+    def _set_hidden_by_parent(self, hidden: bool) -> None:
+        if self._hidden_by_parent == hidden:
+            return
+        self._hidden_by_parent = hidden
+        if self._hidden_group:
+            return
+        for layer in self._layers:
+            if isinstance(layer, (Group, TileGrid)):
+                layer._set_hidden_by_parent(hidden)  # pylint: disable=protected-access
 
     @property
     def hidden(self) -> bool:
@@ -166,10 +210,11 @@ class Group:
         return self._hidden_group
 
     @hidden.setter
-    def hidden(self, value: bool):
+    def hidden(self, value: bool) -> None:
         if not isinstance(value, (bool, int)):
             raise ValueError("Expecting a boolean or integer value")
-        self._hidden_group = bool(value)
+        value = bool(value)
+        self._set_hidden(value)
 
     @property
     def scale(self) -> int:
@@ -237,3 +282,6 @@ class Group:
                 self._absolute_transform.y += dy_value * (value - self._group_y)
             self._group_y = value
             self._update_child_transforms()
+
+
+circuitpython_splash = Group(scale=2, x=0, y=0)

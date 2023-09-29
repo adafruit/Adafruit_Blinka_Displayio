@@ -17,8 +17,9 @@ paralleldisplay for Blinka
 
 """
 
+from typing import Optional
 import microcontroller
-import circuitpython_typing
+from circuitpython_typing import ReadableBuffer
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -37,8 +38,8 @@ class ParallelBus:
         command: microcontroller.Pin,
         chip_select: microcontroller.Pin,
         write: microcontroller.Pin,
-        read: microcontroller.Pin,
-        reset: microcontroller.Pin,
+        read: Optional[microcontroller.Pin],
+        reset: Optional[microcontroller.Pin] = None,
         frequency: int = 30000000,
     ):
         # pylint: disable=unnecessary-pass
@@ -61,9 +62,26 @@ class ParallelBus:
         """
         raise NotImplementedError("ParallelBus reset has not been implemented yet")
 
-    def send(self, command: int, data: circuitpython_typing.ReadableBuffer) -> None:
+    def send(self, command: int, data: ReadableBuffer) -> None:
         """Sends the given command value followed by the full set of data. Display state,
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
         raise NotImplementedError("ParallelBus send has not been implemented yet")
+
+    def _send(
+        self,
+        _data_type: int,
+        _chip_select: int,
+        _data: ReadableBuffer,
+    ) -> None:
+        pass
+
+    def _free(self) -> bool:
+        """Attempt to free the bus and return False if busy"""
+
+    def _begin_transaction(self) -> bool:
+        pass
+
+    def _end_transaction(self) -> None:
+        pass

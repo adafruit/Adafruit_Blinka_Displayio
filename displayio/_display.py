@@ -18,20 +18,16 @@ displayio for Blinka
 """
 
 import time
-import struct
-import threading
+from array import array
 from typing import Optional
-from dataclasses import astuple
 import digitalio
-from PIL import Image
-import numpy
 import microcontroller
-import circuitpython_typing
+from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from ._displaycore import _DisplayCore
 from ._displaybus import _DisplayBus
 from ._colorconverter import ColorConverter
-from ._group import Group
-from ._structs import RectangleStruct
+from ._group import Group, circuitpython_splash
+from ._area import Area
 from ._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
@@ -39,16 +35,16 @@ from ._constants import (
     DISPLAY_DATA,
     BACKLIGHT_IN_OUT,
     BACKLIGHT_PWM,
+    NO_COMMAND,
+    DELAY,
 )
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-displays = []
-
 
 class Display:
-    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-instance-attributes, too-many-statements
     """This initializes a display and connects it into CircuitPython. Unlike other objects
     in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
     This is done so that CircuitPython can use the display itself.
@@ -60,7 +56,7 @@ class Display:
     def __init__(
         self,
         display_bus: _DisplayBus,
-        init_sequence: circuitpython_typing.ReadableBuffer,
+        init_sequence: ReadableBuffer,
         *,
         width: int,
         height: int,
@@ -79,16 +75,14 @@ class Display:
         backlight_pin: Optional[microcontroller.Pin] = None,
         brightness_command: Optional[int] = None,
         brightness: float = 1.0,
-        auto_brightness: bool = False,
         single_byte_bounds: bool = False,
         data_as_commands: bool = False,
         auto_refresh: bool = True,
         native_frames_per_second: int = 60,
         backlight_on_high: bool = True,
         SH1107_addressing: bool = False,
-        set_vertical_scroll: int = 0,
     ):
-        # pylint: disable=unused-argument,too-many-locals,invalid-name
+        # pylint: disable=too-many-locals,invalid-name, too-many-branches
         """Create a Display object on the given display bus (`displayio.FourWire` or
         `paralleldisplay.ParallelBus`).
 
@@ -118,11 +112,21 @@ class Display:
         The initialization sequence should always leave the display memory access inline with
         the scan of the display to minimize tearing artifacts.
         """
+
+        if rotation % 90 != 0:
+            raise ValueError("Display rotation must be in 90 degree increments")
+
+        if SH1107_addressing and color_depth != 1:
+            raise ValueError("color_depth must be 1 when SH1107_addressing is True")
+
+        # Turn off auto-refresh as we init
+        self._auto_refresh = False
         ram_width = 0x100
         ram_height = 0x100
         if single_byte_bounds:
             ram_width = 0xFF
             ram_height = 0xFF
+
         self._core = _DisplayCore(
             bus=display_bus,
             width=width,
@@ -138,31 +142,67 @@ class Display:
             bytes_per_cell=bytes_per_cell,
             reverse_pixels_in_byte=reverse_pixels_in_byte,
             reverse_bytes_in_word=reverse_bytes_in_word,
+            column_command=set_column_command,
+            row_command=set_row_command,
+            set_current_column_command=NO_COMMAND,
+            set_current_row_command=NO_COMMAND,
+            data_as_commands=data_as_commands,
+            always_toggle_chip_select=False,
+            sh1107_addressing=(SH1107_addressing and color_depth == 1),
+            address_little_endian=False,
         )
 
-        self._set_column_command = set_column_command
-        self._set_row_command = set_row_command
         self._write_ram_command = write_ram_command
         self._brightness_command = brightness_command
-        self._data_as_commands = data_as_commands
-        self._single_byte_bounds = single_byte_bounds
-        self._width = width
-        self._height = height
-        self._colstart = colstart
-        self._rowstart = rowstart
-        self._rotation = rotation
-        self._auto_brightness = auto_brightness
-        self._brightness = 1.0
+        self._first_manual_refresh = not auto_refresh
+        self._backlight_on_high = backlight_on_high
+
+        self._native_frames_per_second = native_frames_per_second
+        self._native_ms_per_frame = 1000 // native_frames_per_second
+
+        self._brightness = brightness
         self._auto_refresh = auto_refresh
-        self._initialize(init_sequence)
-        self._buffer = Image.new("RGB", (width, height))
-        self._subrectangles = []
-        self._bounds_encoding = ">BB" if single_byte_bounds else ">HH"
+
+        i = 0
+        while i < len(init_sequence):
+            command = init_sequence[i]
+            data_size = init_sequence[i + 1]
+            delay = (data_size & DELAY) != 0
+            data_size &= ~DELAY
+            while self._core.begin_transaction():
+                pass
+
+            if self._core.data_as_commands:
+                full_command = bytearray(data_size + 1)
+                full_command[0] = command
+                full_command[1:] = init_sequence[i + 2 : i + 2 + data_size]
+                self._core.send(
+                    DISPLAY_COMMAND,
+                    CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                    full_command,
+                )
+            else:
+                self._core.send(
+                    DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
+                )
+                self._core.send(
+                    DISPLAY_DATA,
+                    CHIP_SELECT_UNTOUCHED,
+                    init_sequence[i + 2 : i + 2 + data_size],
+                )
+            self._core.end_transaction()
+            delay_time_ms = 10
+            if delay:
+                data_size += 1
+                delay_time_ms = init_sequence[i + 1 + data_size]
+                if delay_time_ms == 255:
+                    delay_time_ms = 500
+            time.sleep(delay_time_ms / 1000)
+            i += 2 + data_size
+
         self._current_group = None
-        displays.append(self)
+        self._last_refresh_call = 0
         self._refresh_thread = None
-        if self._auto_refresh:
-            self.auto_refresh = True
         self._colorconverter = ColorConverter()
 
         self._backlight_type = None
@@ -180,67 +220,41 @@ class Display:
                 self._backlight_type = BACKLIGHT_IN_OUT
                 self._backlight = digitalio.DigitalInOut(backlight_pin)
                 self._backlight.switch_to_output()
-            self.brightness = brightness
+        self.brightness = brightness
+        if not circuitpython_splash._in_group:
+            self._set_root_group(circuitpython_splash)
+        self.auto_refresh = auto_refresh
 
-    def _initialize(self, init_sequence):
-        i = 0
-        while i < len(init_sequence):
-            command = init_sequence[i]
-            data_size = init_sequence[i + 1]
-            delay = (data_size & 0x80) > 0
-            data_size &= ~0x80
+    def __new__(cls, *args, **kwargs):
+        from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
+            allocate_display,
+        )
 
-            if self._data_as_commands:
-                self._core.send(
-                    DISPLAY_COMMAND,
-                    CHIP_SELECT_TOGGLE_EVERY_BYTE,
-                    bytes([command]) + init_sequence[i + 2 : i + 2 + data_size],
-                )
-            else:
-                self._core.send(
-                    DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
-                )
-                self._core.send(
-                    DISPLAY_DATA,
-                    CHIP_SELECT_UNTOUCHED,
-                    init_sequence[i + 2 : i + 2 + data_size],
-                )
-            delay_time_ms = 10
-            if delay:
-                data_size += 1
-                delay_time_ms = init_sequence[i + 1 + data_size]
-                if delay_time_ms == 255:
-                    delay_time_ms = 500
-            time.sleep(delay_time_ms / 1000)
-            i += 2 + data_size
+        display_instance = super().__new__(cls)
+        allocate_display(display_instance)
+        return display_instance
 
-    def _send(self, command, data):
-        self._core.begin_transaction()
-        if self._data_as_commands:
-            self._core.send(
-                DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command]) + data
-            )
-        else:
-            self._core.send(
-                DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
-            )
-            self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
-        self._core.end_transaction()
-
-    def _send_pixels(self, data):
-        if not self._data_as_commands:
+    def _send_pixels(self, pixels):
+        if not self._core.data_as_commands:
             self._core.send(
                 DISPLAY_COMMAND,
                 CHIP_SELECT_TOGGLE_EVERY_BYTE,
                 bytes([self._write_ram_command]),
             )
-        self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data)
+        self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels)
 
     def show(self, group: Group) -> None:
         """Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
         """
-        self._core.show(group)
+        if group is None:
+            group = circuitpython_splash
+        self._core.set_root_group(group)
+
+    def _set_root_group(self, root_group: Group) -> None:
+        ok = self._core.set_root_group(root_group)
+        if not ok:
+            raise ValueError("Group already used")
 
     def refresh(
         self,
@@ -248,7 +262,6 @@ class Display:
         target_frames_per_second: Optional[int] = None,
         minimum_frames_per_second: int = 0,
     ) -> bool:
-        # pylint: disable=unused-argument, protected-access
         """When auto refresh is off, waits for the target frame rate and then refreshes the
         display, returning True. If the call has taken too long since the last refresh call
         for the given target frame rate, then the refresh returns False immediately without
@@ -260,121 +273,177 @@ class Display:
         When auto refresh is on, updates the display immediately. (The display will also
         update without calls to this.)
         """
+        maximum_ms_per_real_frame = 0xFFFFFFFF
+        if minimum_frames_per_second > 0:
+            maximum_ms_per_real_frame = 1000 // minimum_frames_per_second
+
+        if target_frames_per_second is None:
+            target_ms_per_frame = 0xFFFFFFFF
+        else:
+            target_ms_per_frame = 1000 // target_frames_per_second
+
+        if (
+            not self._auto_refresh
+            and not self._first_manual_refresh
+            and target_ms_per_frame != 0xFFFFFFFF
+        ):
+            current_time = time.monotonic() * 1000
+            current_ms_since_real_refresh = current_time - self._core.last_refresh
+            if current_ms_since_real_refresh > maximum_ms_per_real_frame:
+                raise RuntimeError("Below minimum frame rate")
+            current_ms_since_last_call = current_time - self._last_refresh_call
+            self._last_refresh_call = current_time
+            if current_ms_since_last_call > target_ms_per_frame:
+                return False
+
+            remaining_time = target_ms_per_frame - (
+                current_ms_since_real_refresh % target_ms_per_frame
+            )
+            time.sleep(remaining_time / 1000)
+        self._first_manual_refresh = False
+        self._refresh_display()
+        return True
+
+    def _refresh_display(self):
         if not self._core.start_refresh():
             return False
 
-        # Go through groups and and add each to buffer
-        if self._core._current_group is not None:
-            buffer = Image.new("RGBA", (self._core._width, self._core._height))
-            # Recursively have everything draw to the image
-            self._core._current_group._fill_area(
-                buffer
-            )  # pylint: disable=protected-access
-            # save image to buffer (or probably refresh buffer so we can compare)
-            self._buffer.paste(buffer)
-
-        self._subrectangles = self._core.get_refresh_areas()
-
-        for area in self._subrectangles:
-            self._refresh_display_area(area)
+        areas_to_refresh = self._get_refresh_areas()
+        for area in areas_to_refresh:
+            self._refresh_area(area)
 
         self._core.finish_refresh()
 
         return True
 
-    def _refresh_loop(self):
-        while self._auto_refresh:
+    def _get_refresh_areas(self) -> list[Area]:
+        """Get a list of areas to be refreshed"""
+        areas = []
+        if self._core.full_refresh:
+            areas.append(self._core.area)
+        elif self._core.current_group is not None:
+            self._core.current_group._get_refresh_areas(  # pylint: disable=protected-access
+                areas
+            )
+        return areas
+
+    def _background(self):
+        """Run background refresh tasks. Do not call directly"""
+        if (
+            self._auto_refresh
+            and (time.monotonic() * 1000 - self._core.last_refresh)
+            > self._native_ms_per_frame
+        ):
             self.refresh()
 
-    def _refresh_display_area(self, rectangle):
-        """Loop through dirty rectangles and redraw that area."""
-        img = self._buffer.convert("RGB").crop(astuple(rectangle))
-        img = img.rotate(360 - self._rotation, expand=True)
+    def _refresh_area(self, area) -> bool:
+        """Loop through dirty areas and redraw that area."""
+        # pylint: disable=too-many-locals, too-many-branches
 
-        display_rectangle = self._apply_rotation(rectangle)
-        img = img.crop(astuple(self._clip(display_rectangle)))
+        clipped = Area()
+        # Clip the area to the display by overlapping the areas.
+        # If there is no overlap then we're done.
+        if not self._core.clip_area(area, clipped):
+            return True
 
-        data = numpy.array(img).astype("uint16")
-        color = (
-            ((data[:, :, 0] & 0xF8) << 8)
-            | ((data[:, :, 1] & 0xFC) << 3)
-            | (data[:, :, 2] >> 3)
-        )
+        rows_per_buffer = clipped.height()
+        pixels_per_word = 32 // self._core.colorspace.depth
+        pixels_per_buffer = clipped.size()
 
-        pixels = bytes(
-            numpy.dstack(((color >> 8) & 0xFF, color & 0xFF)).flatten().tolist()
-        )
+        # We should have lots of memory
+        buffer_size = clipped.size() // pixels_per_word
 
-        self._send(
-            self._set_column_command,
-            self._encode_pos(
-                display_rectangle.x1 + self._colstart,
-                display_rectangle.x2 + self._colstart - 1,
-            ),
-        )
-        self._send(
-            self._set_row_command,
-            self._encode_pos(
-                display_rectangle.y1 + self._rowstart,
-                display_rectangle.y2 + self._rowstart - 1,
-            ),
-        )
+        subrectangles = 1
+        # for SH1107 and other boundary constrained controllers
+        #      write one single row at a time
+        if self._core.sh1107_addressing:
+            subrectangles = rows_per_buffer // 8
+            rows_per_buffer = 8
+        elif clipped.size() > buffer_size * pixels_per_word:
+            rows_per_buffer = buffer_size * pixels_per_word // clipped.width()
+            if rows_per_buffer == 0:
+                rows_per_buffer = 1
+            # If pixels are packed by column then ensure rows_per_buffer is on a byte boundary
+            if (
+                self._core.colorspace.depth < 8
+                and self._core.colorspace.pixels_in_byte_share_row
+            ):
+                pixels_per_byte = 8 // self._core.colorspace.depth
+                if rows_per_buffer % pixels_per_byte != 0:
+                    rows_per_buffer -= rows_per_buffer % pixels_per_byte
+            subrectangles = clipped.height() // rows_per_buffer
+            if clipped.height() % rows_per_buffer != 0:
+                subrectangles += 1
+            pixels_per_buffer = rows_per_buffer * clipped.width()
+            buffer_size = pixels_per_buffer // pixels_per_word
+            if pixels_per_buffer % pixels_per_word:
+                buffer_size += 1
+        mask_length = (pixels_per_buffer // 8) + 1  # 1 bit per pixel + 1
+        remaining_rows = clipped.height()
 
-        self._core.begin_transaction()
-        self._send_pixels(pixels)
-        self._core.end_transaction()
-
-    def _clip(self, rectangle):
-        if self._rotation in (90, 270):
-            width, height = self._height, self._width
-        else:
-            width, height = self._width, self._height
-
-        rectangle.x1 = max(rectangle.x1, 0)
-        rectangle.y1 = max(rectangle.y1, 0)
-        rectangle.x2 = min(rectangle.x2, width)
-        rectangle.y2 = min(rectangle.y2, height)
-
-        return rectangle
-
-    def _apply_rotation(self, rectangle):
-        """Adjust the rectangle coordinates based on rotation"""
-        if self._rotation == 90:
-            return RectangleStruct(
-                self._height - rectangle.y2,
-                rectangle.x1,
-                self._height - rectangle.y1,
-                rectangle.x2,
+        for subrect_index in range(subrectangles):
+            subrectangle = Area(
+                clipped.x1,
+                clipped.y1 + rows_per_buffer * subrect_index,
+                clipped.x2,
+                clipped.y1 + rows_per_buffer * (subrect_index + 1),
             )
-        if self._rotation == 180:
-            return RectangleStruct(
-                self._width - rectangle.x2,
-                self._height - rectangle.y2,
-                self._width - rectangle.x1,
-                self._height - rectangle.y1,
-            )
-        if self._rotation == 270:
-            return RectangleStruct(
-                rectangle.y1,
-                self._width - rectangle.x2,
-                rectangle.y2,
-                self._width - rectangle.x1,
-            )
-        return rectangle
+            if remaining_rows < rows_per_buffer:
+                subrectangle.y2 = subrectangle.y1 + remaining_rows
+            remaining_rows -= rows_per_buffer
+            self._core.set_region_to_update(subrectangle)
+            if self._core.colorspace.depth >= 8:
+                subrectangle_size_bytes = subrectangle.size() * (
+                    self._core.colorspace.depth // 8
+                )
+            else:
+                subrectangle_size_bytes = subrectangle.size() // (
+                    8 // self._core.colorspace.depth
+                )
 
-    def _encode_pos(self, x, y):
-        """Encode a postion into bytes."""
-        return struct.pack(self._bounds_encoding, x, y)  # pylint: disable=no-member
+            buffer = memoryview(bytearray([0] * (buffer_size * 4)))
+            mask = memoryview(bytearray([0] * mask_length))
+            self._core.fill_area(subrectangle, mask, buffer)
 
-    def fill_row(
-        self, y: int, buffer: circuitpython_typing.WriteableBuffer
-    ) -> circuitpython_typing.WriteableBuffer:
+            # Can't acquire display bus; skip the rest of the data.
+            if not self._core.bus_free():
+                return False
+
+            self._core.begin_transaction()
+            self._send_pixels(buffer[:subrectangle_size_bytes])
+            self._core.end_transaction()
+        return True
+
+    def fill_row(self, y: int, buffer: WriteableBuffer) -> WriteableBuffer:
         """Extract the pixels from a single row"""
-        for x in range(0, self._width):
-            _rgb_565 = self._colorconverter.convert(self._buffer.getpixel((x, y)))
-            buffer[x * 2] = (_rgb_565 >> 8) & 0xFF
-            buffer[x * 2 + 1] = _rgb_565 & 0xFF
+        if self._core.colorspace.depth != 16:
+            raise ValueError("Display must have a 16 bit colorspace.")
+
+        area = Area(0, y, self._core.width, y + 1)
+        pixels_per_word = 32 // self._core.colorspace.depth
+        buffer_size = self._core.width // pixels_per_word
+        pixels_per_buffer = area.size()
+        if pixels_per_buffer % pixels_per_word:
+            buffer_size += 1
+
+        buffer = bytearray([0] * (buffer_size * 4))
+        mask_length = (pixels_per_buffer // 32) + 1
+        mask = array("L", [0x00000000] * mask_length)
+        self._core.fill_area(area, mask, buffer)
         return buffer
+
+    def _release(self) -> None:
+        """Release the display and free its resources"""
+        self.auto_refresh = False
+        self._core.release_display_core()
+
+    def _reset(self) -> None:
+        """Reset the display"""
+        self.auto_refresh = True
+        circuitpython_splash.x = 0
+        circuitpython_splash.y = 0
+        if not circuitpython_splash._in_group:  # pylint: disable=protected-access
+            self._set_root_group(circuitpython_splash)
 
     @property
     def auto_refresh(self) -> bool:
@@ -383,52 +452,46 @@ class Display:
 
     @auto_refresh.setter
     def auto_refresh(self, value: bool):
+        self._first_manual_refresh = not value
         self._auto_refresh = value
-        if self._refresh_thread is None:
-            self._refresh_thread = threading.Thread(
-                target=self._refresh_loop, daemon=True
-            )
-        if value and not self._refresh_thread.is_alive():
-            # Start the thread
-            self._refresh_thread.start()
-        elif not value and self._refresh_thread.is_alive():
-            # Stop the thread
-            self._refresh_thread.join()
-            self._refresh_thread = None
 
     @property
     def brightness(self) -> float:
-        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`.
-        When `auto_brightness` is True, the value of `brightness` will change automatically.
-        If `brightness` is set, `auto_brightness` will be disabled and will be set to False.
-        """
+        """The brightness of the display as a float. 0.0 is off and 1.0 is full `brightness`."""
         return self._brightness
 
     @brightness.setter
     def brightness(self, value: float):
         if 0 <= float(value) <= 1.0:
-            self._brightness = value
-            if self._backlight_type == BACKLIGHT_IN_OUT:
-                self._backlight.value = round(self._brightness)
-            elif self._backlight_type == BACKLIGHT_PWM:
-                self._backlight.duty_cycle = self._brightness * 65535
+            if not self._backlight_on_high:
+                value = 1.0 - value
+
+            if self._backlight_type == BACKLIGHT_PWM:
+                self._backlight.duty_cycle = value * 0xFFFF
+            elif self._backlight_type == BACKLIGHT_IN_OUT:
+                self._backlight.value = value > 0.99
             elif self._brightness_command is not None:
-                self._send(self._brightness_command, round(value * 255))
+                okay = self._core.begin_transaction()
+                if okay:
+                    if self._core.data_as_commands:
+                        self._core.send(
+                            DISPLAY_COMMAND,
+                            CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                            bytes([self._brightness_command, round(0xFF * value)]),
+                        )
+                    else:
+                        self._core.send(
+                            DISPLAY_COMMAND,
+                            CHIP_SELECT_TOGGLE_EVERY_BYTE,
+                            bytes([self._brightness_command]),
+                        )
+                        self._core.send(
+                            DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, round(value * 255)
+                        )
+                    self._core.end_transaction()
+            self._brightness = value
         else:
             raise ValueError("Brightness must be between 0.0 and 1.0")
-
-    @property
-    def auto_brightness(self) -> bool:
-        """True when the display brightness is adjusted automatically, based on an ambient
-        light sensor or other method. Note that some displays may have this set to True by
-        default, but not actually implement automatic brightness adjustment.
-        `auto_brightness` is set to False if `brightness` is set manually.
-        """
-        return self._auto_brightness
-
-    @auto_brightness.setter
-    def auto_brightness(self, value: bool):
-        self._auto_brightness = value
 
     @property
     def width(self) -> int:
@@ -447,6 +510,8 @@ class Display:
 
     @rotation.setter
     def rotation(self, value: int):
+        if value % 90 != 0:
+            raise ValueError("Display rotation must be in 90 degree increments")
         self._core.set_rotation(value)
 
     @property
