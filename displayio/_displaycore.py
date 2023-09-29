@@ -343,7 +343,7 @@ class _DisplayCore:
         if not self.data_as_commands:
             self.send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, data)
             data = bytearray(0)
-        if self.ram_width < 0x100:  # Single Byte Bounds
+        if self.ram_height < 0x100:  # Single Byte Bounds
             data += struct.pack(">BB", region_y1, region_y2)
         else:
             if self.address_little_endian:
