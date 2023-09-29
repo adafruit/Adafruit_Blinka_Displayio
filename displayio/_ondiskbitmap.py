@@ -19,24 +19,12 @@ displayio for Blinka
 """
 
 from typing import Union, BinaryIO
+from ._helpers import read_word
 from ._colorconverter import ColorConverter
 from ._palette import Palette
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
-
-
-def _read_uint32(buffer: bytes, idx: int) -> int:
-    return (
-        buffer[idx]
-        | buffer[idx + 1] << 8
-        | buffer[idx + 2] << 16
-        | buffer[idx + 3] << 24
-    )
-
-
-def _read_word(header: bytes, idx: int) -> int:
-    return _read_uint32(header, idx * 2)
 
 
 class OnDiskBitmap:
@@ -102,31 +90,33 @@ class OnDiskBitmap:
         try:
             self._file = file
             file.seek(0)
-            bmp_header = file.read(138)
+            bmp_header = memoryview(file.read(138)).cast(
+                "H"
+            )  # cast as unsigned 16-bit int
 
-            if len(bmp_header) != 138 or bmp_header[0:2] != b"BM":
+            if len(bmp_header.tobytes()) != 138 or bmp_header.tobytes()[0:2] != b"BM":
                 raise ValueError("Invalid BMP file")
 
-            self._data_offset = _read_word(bmp_header, 5)
+            self._data_offset = read_word(bmp_header, 5)
 
-            header_size = _read_word(bmp_header, 7)
-            bits_per_pixel = bmp_header[14 * 2] | bmp_header[14 * 2 + 1] << 8
-            compression = _read_word(bmp_header, 15)
-            number_of_colors = _read_word(bmp_header, 23)
+            header_size = read_word(bmp_header, 7)
+            bits_per_pixel = bmp_header[14]
+            compression = read_word(bmp_header, 15)
+            number_of_colors = read_word(bmp_header, 23)
 
             indexed = bits_per_pixel <= 8
             self._bitfield_compressed = compression == 3
             self._bits_per_pixel = bits_per_pixel
-            self._width = _read_word(bmp_header, 9)
-            self._height = _read_word(bmp_header, 11)
+            self._width = read_word(bmp_header, 9)
+            self._height = read_word(bmp_header, 11)
 
             self._colorconverter = ColorConverter()
 
             if bits_per_pixel == 16:
                 if header_size >= 56 or self._bitfield_compressed:
-                    self._r_bitmask = _read_word(bmp_header, 27)
-                    self._g_bitmask = _read_word(bmp_header, 29)
-                    self._b_bitmask = _read_word(bmp_header, 31)
+                    self._r_bitmask = read_word(bmp_header, 27)
+                    self._g_bitmask = read_word(bmp_header, 29)
+                    self._b_bitmask = read_word(bmp_header, 31)
                 else:
                     # No compression or short header mean 5:5:5
                     self._r_bitmask = 0x7C00
@@ -144,12 +134,14 @@ class OnDiskBitmap:
 
                     file.seek(palette_offset)
 
-                    palette_data = file.read(palette_size)
-                    if len(palette_data) != palette_size:
+                    palette_data = memoryview(file.read(palette_size)).cast(
+                        "I"
+                    )  # cast as unsigned 32-bit int
+                    if len(palette_data.tobytes()) != palette_size:
                         raise ValueError("Unable to read color palette data")
 
                     for i in range(number_of_colors):
-                        palette[i] = _read_uint32(palette_data, i * 4)
+                        palette[i] = palette_data[i]
                 else:
                     palette[0] = 0x000000
                     palette[1] = 0xFFFFFF
@@ -253,31 +245,27 @@ class OnDiskBitmap:
 
         self._file.seek(location)
 
-        pixel_data = self._file.read(bytes_per_pixel)
-        if len(pixel_data) == bytes_per_pixel:
-            if bytes_per_pixel == 1:
-                offset = (x % pixels_per_byte) * self._bits_per_pixel
-                mask = (1 << self._bits_per_pixel) - 1
-                return (pixel_data[0] >> ((8 - self._bits_per_pixel) - offset)) & mask
-            if bytes_per_pixel == 2:
-                pixel_data = pixel_data[0] | pixel_data[1] << 8
-                if self._g_bitmask == 0x07E0:  # 565
-                    red = (pixel_data & self._r_bitmask) >> 11
-                    green = (pixel_data & self._g_bitmask) >> 5
-                    blue = pixel_data & self._b_bitmask
-                else:  # 555
-                    red = (pixel_data & self._r_bitmask) >> 10
-                    green = (pixel_data & self._g_bitmask) >> 4
-                    blue = pixel_data & self._b_bitmask
-                return red << 19 | green << 10 | blue << 3
-            if bytes_per_pixel == 4 and self._bitfield_compressed:
-                return pixel_data[0] | pixel_data[1] << 8 | pixel_data[2] << 16
-
-            pixel = pixel_data[0] | pixel_data[1] << 8 | pixel_data[2] << 16
-            if bytes_per_pixel == 4:
-                pixel |= pixel_data[3] << 24
-            return pixel
-        return 0
+        pixel_data = memoryview(self._file.read(4)).cast(
+            "I"
+        )  # cast as unsigned 32-bit int
+        pixel_data = pixel_data[0]  # We only need a single 32-bit uint
+        if bytes_per_pixel == 1:
+            offset = (x % pixels_per_byte) * self._bits_per_pixel
+            mask = (1 << self._bits_per_pixel) - 1
+            return (pixel_data >> ((8 - self._bits_per_pixel) - offset)) & mask
+        if bytes_per_pixel == 2:
+            if self._g_bitmask == 0x07E0:  # 565
+                red = (pixel_data & self._r_bitmask) >> 11
+                green = (pixel_data & self._g_bitmask) >> 5
+                blue = pixel_data & self._b_bitmask
+            else:  # 555
+                red = (pixel_data & self._r_bitmask) >> 10
+                green = (pixel_data & self._g_bitmask) >> 4
+                blue = pixel_data & self._b_bitmask
+            return red << 19 | green << 10 | blue << 3
+        if bytes_per_pixel == 4 and self._bitfield_compressed:
+            return pixel_data & 0x00FFFFFF
+        return pixel_data
 
     def _finish_refresh(self) -> None:
         pass

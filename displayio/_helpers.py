@@ -29,3 +29,8 @@ def clamp(value, min_value, max_value):
 def bswap16(value):
     """Swap the bytes in a 16 bit value"""
     return (value & 0xFF00) >> 8 | (value & 0x00FF) << 8
+
+
+def read_word(header: memoryview, index: int) -> int:
+    """Read a 32-bit value from a memoryview cast as 16-bit values"""
+    return header[index] | header[index + 1] << 16
