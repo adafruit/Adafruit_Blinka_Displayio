@@ -327,6 +327,9 @@ class ColorConverter:
         """Make the ColorConverter be opaque and have no transparent pixels."""
         self._transparent_color = None
 
+    def _finish_refresh(self) -> None:
+        pass
+
     @property
     def dither(self) -> bool:
         """When true the color converter dithers the output by adding
