@@ -76,7 +76,7 @@ class EPaperDisplay:
         color_bits_inverted: bool = False,
         highlight_color: int = 0x000000,
         refresh_display_command: Union[int, ReadableBuffer],
-        refresh_time: float = 40.0,
+        refresh_time: float = 40,
         busy_pin: Optional[microcontroller.Pin] = None,
         busy_state: bool = True,
         seconds_per_frame: float = 180,
@@ -229,6 +229,8 @@ class EPaperDisplay:
             self._busy = DigitalInOut(busy_pin)
             self._busy.switch_to_input()
 
+        self._ticks_disabled = False
+
         # Clear the color memory if it isn't in use
         if highlight_color == 0x00 and write_color_ram_command != NO_COMMAND:
             """TODO: Clear"""
@@ -241,7 +243,6 @@ class EPaperDisplay:
         )
 
         display_instance = super().__new__(cls)
-        display_instance._refreshing = False
         allocate_display(display_instance)
         return display_instance
 
@@ -272,6 +273,7 @@ class EPaperDisplay:
     def _refresh(self) -> bool:
         if self._refreshing and self._busy is not None:
             if self._busy.value != self._busy_state:
+                self._ticks_disabled = True
                 self._refreshing = False
                 self._send_command_sequence(False, self._stop_sequence)
             else:
@@ -309,6 +311,7 @@ class EPaperDisplay:
         """Release the display and free its resources"""
         if self._refreshing:
             self._wait_for_busy()
+            self._ticks_disabled = True
             self._refreshing = False
             # Run stop sequence but don't wait for busy because busy is set when sleeping
             self._send_command_sequence(False, self._stop_sequence)
@@ -318,6 +321,14 @@ class EPaperDisplay:
 
     def _background(self) -> None:
         """Run background refresh tasks."""
+
+        # Wait until initialized
+        if not hasattr(self, "_core"):
+            return
+
+        if self._ticks_disabled:
+            return
+
         if self._refreshing:
             refresh_done = False
             if self._busy is not None:
@@ -329,6 +340,7 @@ class EPaperDisplay:
                     > self._refresh_time
                 )
             if refresh_done:
+                self._ticks_disabled = True
                 self._refreshing = False
                 self._finish_refresh()
                 # Run stop sequence but don't wait for busy because busy is set when sleeping
@@ -354,7 +366,6 @@ class EPaperDisplay:
     def _refresh_area(self, area: Area) -> bool:
         """Redraw the area."""
         # pylint: disable=too-many-locals, too-many-branches
-
         clipped = Area()
         # Clip the area to the display by overlapping the areas.
         # If there is no overlap then we're done.
@@ -466,11 +477,12 @@ class EPaperDisplay:
             self._core.send(
                 DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, bytes([command])
             )
-            self._core.send(
-                DISPLAY_DATA,
-                CHIP_SELECT_UNTOUCHED,
-                data,
-            )
+            if data_size > 0:
+                self._core.send(
+                    DISPLAY_DATA,
+                    CHIP_SELECT_UNTOUCHED,
+                    bytes(data),
+                )
             self._core.end_transaction()
             delay_time_ms = 0
             if delay:
@@ -495,12 +507,13 @@ class EPaperDisplay:
     def _finish_refresh(self) -> None:
         # Actually refresh the display now that all pixel RAM has been updated
         self._send_command_sequence(False, self._refesh_sequence)
+        self._ticks_disabled = False
         self._refreshing = True
         self._core.finish_refresh()
 
     def _wait_for_busy(self) -> None:
         if self._busy is not None:
-            while self._busy.value != self._busy_state:
+            while self._busy.value == self._busy_state:
                 time.sleep(0.001)
 
     def _clean_area(self) -> bool:
