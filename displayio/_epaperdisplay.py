@@ -158,6 +158,7 @@ class EPaperDisplay:
         if rotation % 90 != 0:
             raise ValueError("Display rotation must be in 90 degree increments")
 
+        self._refreshing = False
         color_depth = 1
         core_grayscale = True
 
@@ -210,7 +211,6 @@ class EPaperDisplay:
         self._color_bits_inverted = color_bits_inverted
         self._refresh_time_ms = refresh_time * 1000
         self._busy_state = busy_state
-        self._refreshing = False
         self._milliseconds_per_frame = seconds_per_frame * 1000
         self._chip_select = (
             CHIP_SELECT_TOGGLE_EVERY_BYTE
@@ -241,6 +241,7 @@ class EPaperDisplay:
         )
 
         display_instance = super().__new__(cls)
+        display_instance._refreshing = False
         allocate_display(display_instance)
         return display_instance
 
