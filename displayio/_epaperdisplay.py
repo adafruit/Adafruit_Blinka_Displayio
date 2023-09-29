@@ -222,7 +222,7 @@ class EPaperDisplay:
         self._start_sequence = start_sequence
         self._start_up_time = start_up_time
         self._stop_sequence = stop_sequence
-        self._refesh_sequence = refresh_sequence
+        self._refresh_sequence = refresh_sequence
         self._busy = None
         self._two_byte_sequence_length = two_byte_sequence_length
         if busy_pin is not None:
@@ -303,7 +303,7 @@ class EPaperDisplay:
         self._start_refresh()
         for area in areas_to_refresh:
             self._refresh_area(area)
-        self._core.finish_refresh()
+        self._finish_refresh()
 
         return True
 
@@ -339,10 +339,10 @@ class EPaperDisplay:
                     time.monotonic() * 1000 - self._core.last_refresh
                     > self._refresh_time
                 )
+
             if refresh_done:
                 self._ticks_disabled = True
                 self._refreshing = False
-                self._finish_refresh()
                 # Run stop sequence but don't wait for busy because busy is set when sleeping
                 self._send_command_sequence(False, self._stop_sequence)
 
@@ -506,7 +506,7 @@ class EPaperDisplay:
 
     def _finish_refresh(self) -> None:
         # Actually refresh the display now that all pixel RAM has been updated
-        self._send_command_sequence(False, self._refesh_sequence)
+        self._send_command_sequence(False, self._refresh_sequence)
         self._ticks_disabled = False
         self._refreshing = True
         self._core.finish_refresh()
