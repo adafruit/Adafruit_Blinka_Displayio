@@ -298,6 +298,7 @@ class EPaperDisplay:
             self._finish_refresh()
             while self._refreshing:
                 # TODO: Add something here that can change self._refreshing
+                # or add something in _background()
                 pass
 
         self._start_refresh()
@@ -446,7 +447,7 @@ class EPaperDisplay:
                 if (pass_index == 1 and self._color_bits_inverted) or (
                     pass_index == 0 and self._black_bits_inverted
                 ):
-                    for i, _ in enumerate(buffer):
+                    for i in range(buffer_size):
                         buffer[i] = ~buffer[i]
 
                 if not self._core.begin_transaction():
