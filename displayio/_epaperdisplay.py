@@ -371,10 +371,6 @@ class EPaperDisplay:
         # If there is no overlap then we're done.
         if not self._core.clip_area(area, clipped):
             return True
-        print("---------------")
-        print(area.x1, area.y1, area.x2, area.y2)
-        print(clipped.x1, clipped.y1, clipped.x2, clipped.y2)
-        print("---------------")
         subrectangles = 1
         rows_per_buffer = clipped.height()
         pixels_per_word = 32 // self._core.colorspace.depth
