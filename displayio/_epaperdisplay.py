@@ -371,7 +371,10 @@ class EPaperDisplay:
         # If there is no overlap then we're done.
         if not self._core.clip_area(area, clipped):
             return True
-
+        print("---------------")
+        print(area.x1, area.y1, area.x2, area.y2)
+        print(clipped.x1, clipped.y1, clipped.x2, clipped.y2)
+        print("---------------")
         subrectangles = 1
         rows_per_buffer = clipped.height()
         pixels_per_word = 32 // self._core.colorspace.depth
@@ -392,7 +395,7 @@ class EPaperDisplay:
             if pixels_per_buffer % pixels_per_word:
                 buffer_size += 1
 
-        mask_length = (pixels_per_buffer // 8) + 1  # 1 bit per pixel + 1
+        mask_length = (pixels_per_buffer // 32) + 1  # 1 bit per pixel + 1
 
         passes = 1
         if self._write_color_ram_command != NO_COMMAND:
@@ -412,10 +415,10 @@ class EPaperDisplay:
 
             for subrect_index in range(subrectangles):
                 subrectangle = Area(
-                    clipped.x1,
-                    clipped.y1 + rows_per_buffer * subrect_index,
-                    clipped.x2,
-                    clipped.y1 + rows_per_buffer * (subrect_index + 1),
+                    x1=clipped.x1,
+                    y1=clipped.y1 + rows_per_buffer * subrect_index,
+                    x2=clipped.x2,
+                    y2=clipped.y1 + rows_per_buffer * (subrect_index + 1),
                 )
                 if remaining_rows < rows_per_buffer:
                     subrectangle.y2 = subrectangle.y1 + remaining_rows
@@ -425,8 +428,8 @@ class EPaperDisplay:
                     8 // self._core.colorspace.depth
                 )
 
-                buffer = memoryview(bytearray([0] * (buffer_size * 4)))
-                mask = memoryview(bytearray([0] * mask_length))
+                buffer = memoryview(bytearray([0] * (buffer_size * 4))).cast("I")
+                mask = memoryview(bytearray([0] * (mask_length * 4))).cast("I")
 
                 if not self._acep:
                     self._core.colorspace.grayscale = True
@@ -454,7 +457,9 @@ class EPaperDisplay:
                     # Can't acquire display bus; skip the rest of the data. Try next display.
                     return False
                 self._core.send(
-                    DISPLAY_DATA, self._chip_select, buffer[:subrectangle_size_bytes]
+                    DISPLAY_DATA,
+                    self._chip_select,
+                    buffer.tobytes()[:subrectangle_size_bytes],
                 )
                 self._core.end_transaction()
         return True
@@ -547,6 +552,10 @@ class EPaperDisplay:
         if transposed != will_transposed:
             self._core.width, self._core.height = self._core.height, self._core.width
         self._core.set_rotation(value)
+        if self._core.current_group is not None:
+            self._core.current_group._update_transform(  # pylint: disable=protected-access
+                self._core.transform
+            )
 
     @property
     def time_to_refresh(self) -> float:
