@@ -234,27 +234,30 @@ class OnDiskBitmap:
 
         self._file.seek(location)
 
-        pixel_data = memoryview(self._file.read(4)).cast(
-            "I"
-        )  # cast as unsigned 32-bit int
-        pixel_data = pixel_data[0]  # We only need a single 32-bit uint
-        if bytes_per_pixel == 1:
-            offset = (x % pixels_per_byte) * self._bits_per_pixel
-            mask = (1 << self._bits_per_pixel) - 1
-            return (pixel_data >> ((8 - self._bits_per_pixel) - offset)) & mask
-        if bytes_per_pixel == 2:
-            if self._g_bitmask == 0x07E0:  # 565
-                red = (pixel_data & self._r_bitmask) >> 11
-                green = (pixel_data & self._g_bitmask) >> 5
-                blue = pixel_data & self._b_bitmask
-            else:  # 555
-                red = (pixel_data & self._r_bitmask) >> 10
-                green = (pixel_data & self._g_bitmask) >> 4
-                blue = pixel_data & self._b_bitmask
-            return red << 19 | green << 10 | blue << 3
-        if bytes_per_pixel == 4 and self._bitfield_compressed:
-            return pixel_data & 0x00FFFFFF
-        return pixel_data
+        pixel_data = self._file.read(bytes_per_pixel)
+        if len(pixel_data) == bytes_per_pixel:
+            if bytes_per_pixel == 1:
+                offset = (x % pixels_per_byte) * self._bits_per_pixel
+                mask = (1 << self._bits_per_pixel) - 1
+                return (pixel_data[0] >> ((8 - self._bits_per_pixel) - offset)) & mask
+            if bytes_per_pixel == 2:
+                pixel_data = pixel_data[0] | pixel_data[1] << 8
+                if self._g_bitmask == 0x07E0:  # 565
+                    red = (pixel_data & self._r_bitmask) >> 11
+                    green = (pixel_data & self._g_bitmask) >> 5
+                    blue = pixel_data & self._b_bitmask
+                else:  # 555
+                    red = (pixel_data & self._r_bitmask) >> 10
+                    green = (pixel_data & self._g_bitmask) >> 4
+                    blue = pixel_data & self._b_bitmask
+                return red << 19 | green << 10 | blue << 3
+            if bytes_per_pixel == 4 and self._bitfield_compressed:
+                return pixel_data[0] | pixel_data[1] << 8 | pixel_data[2] << 16
+            pixel = pixel_data[0] | pixel_data[1] << 8 | pixel_data[2] << 16
+            if bytes_per_pixel == 4:
+                pixel |= pixel_data[3] << 24
+            return pixel
+        return 0
 
     def _finish_refresh(self) -> None:
         pass

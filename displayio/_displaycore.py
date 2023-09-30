@@ -283,7 +283,6 @@ class _DisplayCore:
             else:
                 region_y1 //= pixels_per_byte * self.colorspace.bytes_per_cell
                 region_y2 //= pixels_per_byte * self.colorspace.bytes_per_cell
-        print(region_y2)
         region_x2 -= 1
         region_y2 -= 1
 
