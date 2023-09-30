@@ -44,12 +44,10 @@ class Palette:
 
         self._colors = []
         for _ in range(color_count):
-            self._colors.append(self._make_color(0))
+            self._colors.append(ColorStruct())
 
     @staticmethod
-    def _make_color(value, transparent=False):
-        color = ColorStruct(transparent=transparent)
-
+    def _color_to_int(value):
         if isinstance(value, (tuple, list, bytes, bytearray)):
             value = (value[0] & 0xFF) << 16 | (value[1] & 0xFF) << 8 | value[2] & 0xFF
         elif isinstance(value, int):
@@ -57,9 +55,7 @@ class Palette:
                 raise ValueError("Color must be between 0x000000 and 0xFFFFFF")
         else:
             raise TypeError("Color buffer must be a buffer, tuple, list, or int")
-        color.rgb888 = value
-
-        return color
+        return value
 
     def __len__(self) -> int:
         """Returns the number of colors in a Palette"""
@@ -77,10 +73,13 @@ class Palette:
         (to represent an RGB value). Value can be an int, bytes (3 bytes (RGB) or
         4 bytes (RGB + pad byte)), bytearray, or a tuple or list of 3 integers.
         """
-        if self._colors[index].rgb888 == value:
+        self._set_color(index, self._color_to_int(value))
+
+    def _set_color(self, palette_index: int, color: int):
+        if self._colors[palette_index].rgb888 == color:
             return
-        self._colors[index] = self._make_color(value)
-        self._colors[index].cached_colorspace = None
+        self._colors[palette_index].rgb888 = color
+        self._colors[palette_index].cached_colorspace = None
         self._needs_refresh = True
 
     def __getitem__(self, index: int) -> Optional[int]:
