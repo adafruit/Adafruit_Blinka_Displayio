@@ -88,14 +88,5 @@ class ColorStruct:
     cached_colorspace_grayscale: bool = False
     transparent: bool = False
 
-    def rgba(self) -> tuple[int, int, int, int]:
-        """Return the color as a tuple of red, green, blue, alpha"""
-        return (
-            self.rgb888 >> 16,
-            (self.rgb888 >> 8) & 0xFF,
-            self.rgb888 & 0xFF,
-            0 if self.transparent else 0xFF,
-        )
-
 
 null_transform = TransformStruct()  # Use defaults

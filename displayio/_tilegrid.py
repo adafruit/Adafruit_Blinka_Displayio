@@ -363,19 +363,18 @@ class TileGrid:
                 if not output_pixel.opaque:
                     full_coverage = False
                 else:
-                    mask[offset // 8] |= 1 << (offset % 8)
-                    # print("Mask", mask)
+                    mask[offset // 32] |= 1 << (offset % 32)
                     if colorspace.depth == 16:
                         struct.pack_into(
                             "H",
-                            buffer,
+                            buffer.cast("B"),
                             offset * 2,
                             output_pixel.pixel,
                         )
                     elif colorspace.depth == 32:
                         struct.pack_into(
                             "I",
-                            buffer,
+                            buffer.cast("B"),
                             offset * 4,
                             output_pixel.pixel,
                         )

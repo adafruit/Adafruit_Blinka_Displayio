@@ -21,6 +21,7 @@ displayio for Blinka
 from typing import Union, BinaryIO
 from ._helpers import read_word
 from ._colorconverter import ColorConverter
+from ._colorspace import Colorspace
 from ._palette import Palette
 
 __version__ = "0.0.0+auto.0"
@@ -110,7 +111,9 @@ class OnDiskBitmap:
             self._width = read_word(bmp_header, 9)
             self._height = read_word(bmp_header, 11)
 
-            self._colorconverter = ColorConverter()
+            self._pixel_shader_base = ColorConverter(
+                input_colorspace=Colorspace.RGB888, dither=False
+            )
 
             if bits_per_pixel == 16:
                 if header_size >= 56 or self._bitfield_compressed:
@@ -126,7 +129,7 @@ class OnDiskBitmap:
                 if number_of_colors == 0:
                     number_of_colors = 1 << bits_per_pixel
 
-                palette = Palette(number_of_colors)
+                palette = Palette(number_of_colors, dither=False)
 
                 if number_of_colors > 1:
                     palette_size = number_of_colors * 4
@@ -141,11 +144,13 @@ class OnDiskBitmap:
                         raise ValueError("Unable to read color palette data")
 
                     for i in range(number_of_colors):
-                        palette[i] = palette_data[i]
+                        palette._set_color(
+                            palette_data[i], i
+                        )  # pylint: disable=protected-access
                 else:
-                    palette[0] = 0x000000
-                    palette[1] = 0xFFFFFF
-                self._palette = palette
+                    palette._set_color(0x000000, 0)  # pylint: disable=protected-access
+                    palette._set_color(0xFFFFFF, 1)  # pylint: disable=protected-access
+                self._pixel_shader_base = palette
             elif header_size not in (12, 40, 108, 124):
                 raise ValueError(
                     "Only Windows format, uncompressed BMP supported: "
@@ -205,22 +210,6 @@ class OnDiskBitmap:
         """
 
         return self._pixel_shader_base
-
-    @property
-    def _colorconverter(self) -> ColorConverter:
-        return self._pixel_shader_base
-
-    @_colorconverter.setter
-    def _colorconverter(self, colorconverter: ColorConverter) -> None:
-        self._pixel_shader_base = colorconverter
-
-    @property
-    def _palette(self) -> Palette:
-        return self._pixel_shader_base
-
-    @_palette.setter
-    def _palette(self, palette: Palette) -> None:
-        self._pixel_shader_base = palette
 
     def _get_pixel(self, x: int, y: int) -> int:
         if not (0 <= x < self.width and 0 <= y < self.height):

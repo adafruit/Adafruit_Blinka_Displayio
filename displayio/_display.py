@@ -401,8 +401,8 @@ class Display:
                     8 // self._core.colorspace.depth
                 )
 
-            buffer = memoryview(bytearray([0] * (buffer_size * 4)))
-            mask = memoryview(bytearray([0] * mask_length))
+            buffer = memoryview(bytearray([0] * (buffer_size * 4))).cast("I")
+            mask = memoryview(bytearray([0] * (mask_length * 4))).cast("I")
             self._core.fill_area(subrectangle, mask, buffer)
 
             # Can't acquire display bus; skip the rest of the data.
