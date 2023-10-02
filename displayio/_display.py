@@ -245,13 +245,12 @@ class Display:
     def show(self, group: Group) -> None:
         """
         .. note:: `show()` is deprecated and will be removed when CircuitPython 9.0.0
-        is released. Use ``.root_group = group`` instead.
+          is released. Use ``.root_group = group`` instead.
 
         Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
 
         :param Group group: The group to show.
-
         """
         if group is None:
             group = circuitpython_splash
