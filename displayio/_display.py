@@ -243,8 +243,14 @@ class Display:
         self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels)
 
     def show(self, group: Group) -> None:
-        """Switches to displaying the given group of layers. When group is None, the
+        """
+        .. note:: `show()` is deprecated and will be removed when CircuitPython 9.0.0
+        is released. Use ``.root_group = group`` instead.
+
+        Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
+
+        :param Group group: The group to show.
         """
         if group is None:
             group = circuitpython_splash
@@ -525,3 +531,15 @@ class Display:
     def bus(self) -> _DisplayBus:
         """Current Display Bus"""
         return self._core.get_bus()
+
+    @property
+    def root_group(self) -> Group:
+        """The root group on the display.
+        If the root group is set to `displayio.CIRCUITPYTHON_TERMINAL`, the default
+        CircuitPython terminal will be shown.
+        If the root group is set to ``None``, no output will be shown."""
+        return self._core.current_group
+
+    @root_group.setter
+    def root_group(self, new_group: Group) -> None:
+        self._set_root_group(new_group)

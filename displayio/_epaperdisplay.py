@@ -248,12 +248,21 @@ class EPaperDisplay:
 
     def show(self, group: Group) -> None:
         # pylint: disable=unnecessary-pass
-        """Switches to displaying the given group of layers. When group is None, the default
+        """
+        .. note:: `show()` is deprecated and will be removed when CircuitPython 9.0.0
+        is released. Use ``.root_group = group`` instead.
+
+        Switches to displaying the given group of layers. When group is None, the default
         CircuitPython terminal will be shown (eventually).
         """
         if group is None:
             group = circuitpython_splash
         self._core.set_root_group(group)
+
+    def _set_root_group(self, root_group: Group) -> None:
+        ok = self._core.set_root_group(root_group)
+        if not ok:
+            raise ValueError("Group already used")
 
     def update_refresh_mode(
         self, start_sequence: ReadableBuffer, seconds_per_frame: float
@@ -592,8 +601,8 @@ class EPaperDisplay:
         """The root group on the epaper display.
         If the root group is set to ``None``, no output will be shown.
         """
-        return self._core.root_group
+        return self._core.current_group
 
     @root_group.setter
     def root_group(self, new_group: Group) -> None:
-        self._core.root_group = new_group
+        self._set_root_group(new_group)
