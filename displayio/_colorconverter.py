@@ -85,7 +85,7 @@ class ColorConverter:
         red8 = color_rgb888 >> 16
         grn8 = (color_rgb888 >> 8) & 0xFF
         blu8 = color_rgb888 & 0xFF
-        return (red8 * 19 + grn8 * 182 + blu8 + 54) // 255
+        return (red8 * 19 + grn8 * 182 + blu8 * 54) // 255
 
     @staticmethod
     def _compute_chroma(color_rgb888: int):
@@ -144,9 +144,7 @@ class ColorConverter:
         return 0x0  # Black
 
     @staticmethod
-    def _compute_tricolor(
-        colorspace: ColorspaceStruct, pixel_hue: int, color: int
-    ) -> int:
+    def _compute_tricolor(colorspace: ColorspaceStruct, pixel_hue: int) -> int:
         hue_diff = colorspace.tricolor_hue - pixel_hue
         if -10 <= hue_diff <= 10 or hue_diff <= -220 or hue_diff >= 220:
             if colorspace.grayscale:
@@ -169,7 +167,7 @@ class ColorConverter:
         else:
             raise ValueError("Color must be an integer or 3 or 4 value tuple")
 
-        input_pixel = InputPixelStruct(color)
+        input_pixel = InputPixelStruct(pixel=color)
         output_pixel = OutputPixelStruct()
 
         self._convert(self._output_colorspace, input_pixel, output_pixel)
@@ -251,9 +249,15 @@ class ColorConverter:
         # pylint: disable=too-many-return-statements, too-many-branches, too-many-statements
         pixel = input_pixel.pixel
         if dither:
-            rand_red = ColorConverter._dither_noise_2(input_pixel.x, input_pixel.y)
-            rand_grn = ColorConverter._dither_noise_2(input_pixel.x + 33, input_pixel.y)
-            rand_blu = ColorConverter._dither_noise_2(input_pixel.x, input_pixel.y + 33)
+            rand_red = ColorConverter._dither_noise_2(
+                input_pixel.tile_x, input_pixel.tile_y
+            )
+            rand_grn = ColorConverter._dither_noise_2(
+                input_pixel.tile_x + 33, input_pixel.tile_y
+            )
+            rand_blu = ColorConverter._dither_noise_2(
+                input_pixel.tile_x, input_pixel.tile_y + 33
+            )
 
             red8 = pixel >> 16
             grn8 = (pixel >> 8) & 0xFF
@@ -287,9 +291,7 @@ class ColorConverter:
                 output_color.opaque = True
                 return
             pixel_hue = ColorConverter._compute_hue(pixel)
-            output_color.pixel = ColorConverter._compute_tricolor(
-                colorspace, pixel_hue, output_color.pixel
-            )
+            output_color.pixel = ColorConverter._compute_tricolor(colorspace, pixel_hue)
             return
         if colorspace.grayscale and colorspace.depth <= 8:
             bitmask = (1 << colorspace.depth) - 1

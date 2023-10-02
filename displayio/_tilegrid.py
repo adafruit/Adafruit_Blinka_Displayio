@@ -319,7 +319,7 @@ class TileGrid:
                 )  # In Pixels
 
                 # Check the mask first to see if the pixel has already been set
-                if mask[offset // 8] & (1 << (offset % 8)):
+                if mask[offset // 32] & (1 << (offset % 32)):
                     continue
                 local_x = input_pixel.x // self._absolute_transform.scale
                 tile_location = (
@@ -379,7 +379,7 @@ class TileGrid:
                             output_pixel.pixel,
                         )
                     elif colorspace.depth == 8:
-                        buffer[offset] = output_pixel.pixel & 0xFF
+                        buffer.cast("B")[offset] = output_pixel.pixel & 0xFF
                     elif colorspace.depth < 8:
                         # Reorder the offsets to pack multiple rows into
                         # a byte (meaning they share a column).
@@ -398,7 +398,9 @@ class TileGrid:
                         if colorspace.reverse_pixels_in_byte:
                             # Reverse the shift by subtracting it from the leftmost shift
                             shift = (pixels_per_byte - 1) * colorspace.depth - shift
-                        buffer[offset // pixels_per_byte] |= output_pixel.pixel << shift
+                        buffer.cast("B")[offset // pixels_per_byte] |= (
+                            output_pixel.pixel << shift
+                        )
 
         return full_coverage
 

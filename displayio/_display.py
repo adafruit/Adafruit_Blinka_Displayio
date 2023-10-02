@@ -18,7 +18,6 @@ displayio for Blinka
 """
 
 import time
-from array import array
 from typing import Optional
 import digitalio
 import microcontroller
@@ -244,8 +243,14 @@ class Display:
         self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels)
 
     def show(self, group: Group) -> None:
-        """Switches to displaying the given group of layers. When group is None, the
+        """
+        .. note:: `show()` is deprecated and will be removed when CircuitPython 9.0.0
+          is released. Use ``.root_group = group`` instead.
+
+        Switches to displaying the given group of layers. When group is None, the
         default CircuitPython terminal will be shown.
+
+        :param Group group: The group to show.
         """
         if group is None:
             group = circuitpython_splash
@@ -378,15 +383,15 @@ class Display:
             buffer_size = pixels_per_buffer // pixels_per_word
             if pixels_per_buffer % pixels_per_word:
                 buffer_size += 1
-        mask_length = (pixels_per_buffer // 8) + 1  # 1 bit per pixel + 1
+        mask_length = (pixels_per_buffer // 32) + 1  # 1 bit per pixel + 1
         remaining_rows = clipped.height()
 
         for subrect_index in range(subrectangles):
             subrectangle = Area(
-                clipped.x1,
-                clipped.y1 + rows_per_buffer * subrect_index,
-                clipped.x2,
-                clipped.y1 + rows_per_buffer * (subrect_index + 1),
+                x1=clipped.x1,
+                y1=clipped.y1 + rows_per_buffer * subrect_index,
+                x2=clipped.x2,
+                y2=clipped.y1 + rows_per_buffer * (subrect_index + 1),
             )
             if remaining_rows < rows_per_buffer:
                 subrectangle.y2 = subrectangle.y1 + remaining_rows
@@ -410,7 +415,7 @@ class Display:
                 return False
 
             self._core.begin_transaction()
-            self._send_pixels(buffer[:subrectangle_size_bytes])
+            self._send_pixels(buffer.tobytes()[:subrectangle_size_bytes])
             self._core.end_transaction()
         return True
 
@@ -426,9 +431,9 @@ class Display:
         if pixels_per_buffer % pixels_per_word:
             buffer_size += 1
 
-        buffer = bytearray([0] * (buffer_size * 4))
+        buffer = memoryview(bytearray([0] * (buffer_size * 4))).cast("I")
         mask_length = (pixels_per_buffer // 32) + 1
-        mask = array("L", [0x00000000] * mask_length)
+        mask = memoryview(bytearray([0] * (mask_length * 4))).cast("I")
         self._core.fill_area(area, mask, buffer)
         return buffer
 
@@ -512,9 +517,31 @@ class Display:
     def rotation(self, value: int):
         if value % 90 != 0:
             raise ValueError("Display rotation must be in 90 degree increments")
+        transposed = self._core.rotation in (90, 270)
+        will_transposed = value in (90, 270)
+        if transposed != will_transposed:
+            self._core.width, self._core.height = self._core.height, self._core.width
         self._core.set_rotation(value)
+        if self._core.current_group is not None:
+            self._core.current_group._update_transform(  # pylint: disable=protected-access
+                self._core.transform
+            )
 
     @property
     def bus(self) -> _DisplayBus:
         """Current Display Bus"""
         return self._core.get_bus()
+
+    @property
+    def root_group(self) -> Group:
+        """
+        The root group on the display.
+        If the root group is set to `displayio.CIRCUITPYTHON_TERMINAL`, the default
+        CircuitPython terminal will be shown.
+        If the root group is set to ``None``, no output will be shown.
+        """
+        return self._core.current_group
+
+    @root_group.setter
+    def root_group(self, new_group: Group) -> None:
+        self._set_root_group(new_group)

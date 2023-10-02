@@ -118,16 +118,13 @@ class _DisplayCore:
         self.rotation = rotation
         self.transform = TransformStruct()
 
+        self.set_rotation(rotation)
+
     def set_rotation(self, rotation: int) -> None:
         """
         Sets the rotation of the display as an int in degrees.
         """
         # pylint: disable=protected-access, too-many-branches
-        transposed = self.rotation in (90, 270)
-        will_be_transposed = rotation in (90, 270)
-        if transposed != will_be_transposed:
-            self.width, self.height = self.height, self.width
-
         height = self.height
         width = self.width
 
@@ -175,9 +172,6 @@ class _DisplayCore:
             if self.transform.mirror_y:
                 self.transform.y = height
                 self.transform.dy = -1
-
-        if self.current_group is not None:
-            self.current_group._update_transform(self.transform)
 
     def set_root_group(self, root_group: Group) -> bool:
         """
@@ -289,7 +283,6 @@ class _DisplayCore:
             else:
                 region_y1 //= pixels_per_byte * self.colorspace.bytes_per_cell
                 region_y2 //= pixels_per_byte * self.colorspace.bytes_per_cell
-
         region_x2 -= 1
         region_y2 -= 1
 
