@@ -251,6 +251,7 @@ class Display:
         default CircuitPython terminal will be shown.
 
         :param Group group: The group to show.
+
         """
         if group is None:
             group = circuitpython_splash
@@ -534,10 +535,12 @@ class Display:
 
     @property
     def root_group(self) -> Group:
-        """The root group on the display.
+        """
+        The root group on the display.
         If the root group is set to `displayio.CIRCUITPYTHON_TERMINAL`, the default
         CircuitPython terminal will be shown.
-        If the root group is set to ``None``, no output will be shown."""
+        If the root group is set to ``None``, no output will be shown.
+        """
         return self._core.current_group
 
     @root_group.setter
