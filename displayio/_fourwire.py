@@ -158,14 +158,9 @@ class FourWire:
         self._spi.configure(
             baudrate=self._frequency, polarity=self._polarity, phase=self._phase
         )
-<<<<<<< HEAD
-        self._chip_select.value = False
-        return True
-=======
 
         if self._chip_select is not None:
             self._chip_select.value = False
->>>>>>> 87a1bde (make chip_select pin optional in SPI four wire)
 
     def _end_transaction(self) -> None:
         """End the SPI transaction by unlocking and setting Chip Select"""
