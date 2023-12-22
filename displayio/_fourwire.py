@@ -162,6 +162,8 @@ class FourWire:
         if self._chip_select is not None:
             self._chip_select.value = False
 
+        return True
+
     def _end_transaction(self) -> None:
         """End the SPI transaction by unlocking and setting Chip Select"""
         if self._chip_select is not None:
