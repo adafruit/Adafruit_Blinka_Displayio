@@ -20,6 +20,7 @@ displayio for Blinka
 from __future__ import annotations
 from typing import Union, Callable
 from circuitpython_typing import WriteableBuffer
+from vectorio._rectangle import _VectorShape
 from ._structs import TransformStruct
 from ._tilegrid import TileGrid
 from ._colorspace import Colorspace
@@ -54,7 +55,7 @@ class Group:
         self._hidden_group = False
         self._hidden_by_parent = False
         self._layers = []
-        self._supported_types = (TileGrid, Group)
+        self._supported_types = (TileGrid, Group, _VectorShape)
         self._in_group = False
         self._item_removed = False
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
@@ -94,33 +95,34 @@ class Group:
         layer = self._layers[index]
         layer._update_transform(self._absolute_transform)
 
-    def append(self, layer: Union[Group, TileGrid]) -> None:
+    def append(self, layer: Union[Group, TileGrid, _VectorShape]) -> None:
         """Append a layer to the group. It will be drawn
         above other layers.
         """
         self.insert(len(self._layers), layer)
 
-    def insert(self, index: int, layer: Union[Group, TileGrid]) -> None:
+    def insert(self, index: int, layer: Union[Group, TileGrid, _VectorShape]) -> None:
         """Insert a layer into the group."""
         if not isinstance(layer, self._supported_types):
             raise ValueError("Invalid Group Member")
-        if layer._in_group:  # pylint: disable=protected-access
-            raise ValueError("Layer already in a group.")
+        if isinstance(layer, (Group, TileGrid)):
+            if layer._in_group:  # pylint: disable=protected-access
+                raise ValueError("Layer already in a group.")
         self._layers.insert(index, layer)
         self._layer_update(index)
 
-    def index(self, layer: Union[Group, TileGrid]) -> int:
+    def index(self, layer: Union[Group, TileGrid, _VectorShape]) -> int:
         """Returns the index of the first copy of layer.
         Raises ValueError if not found.
         """
         return self._layers.index(layer)
 
-    def pop(self, index: int = -1) -> Union[Group, TileGrid]:
+    def pop(self, index: int = -1) -> Union[Group, TileGrid, _VectorShape]:
         """Remove the ith item and return it."""
         self._removal_cleanup(index)
         return self._layers.pop(index)
 
-    def remove(self, layer: Union[Group, TileGrid]) -> None:
+    def remove(self, layer: Union[Group, TileGrid, _VectorShape]) -> None:
         """Remove the first copy of layer. Raises ValueError
         if it is not present."""
         index = self.index(layer)
@@ -134,11 +136,13 @@ class Group:
         """Returns the number of layers in a Group"""
         return len(self._layers)
 
-    def __getitem__(self, index: int) -> Union[Group, TileGrid]:
+    def __getitem__(self, index: int) -> Union[Group, TileGrid, _VectorShape]:
         """Returns the value at the given index."""
         return self._layers[index]
 
-    def __setitem__(self, index: int, value: Union[Group, TileGrid]) -> None:
+    def __setitem__(
+        self, index: int, value: Union[Group, TileGrid, _VectorShape]
+    ) -> None:
         """Sets the value at the given index."""
         self._removal_cleanup(index)
         self._layers[index] = value
@@ -157,7 +161,7 @@ class Group:
     ) -> bool:
         if not self._hidden_group:
             for layer in reversed(self._layers):
-                if isinstance(layer, (Group, TileGrid)):
+                if isinstance(layer, (Group, TileGrid, _VectorShape)):
                     if layer._fill_area(  # pylint: disable=protected-access
                         colorspace, area, mask, buffer
                     ):
@@ -170,13 +174,13 @@ class Group:
 
     def _finish_refresh(self):
         for layer in reversed(self._layers):
-            if isinstance(layer, (Group, TileGrid)):
+            if isinstance(layer, (Group, TileGrid, _VectorShape)):
                 layer._finish_refresh()  # pylint: disable=protected-access
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         # pylint: disable=protected-access
         for layer in reversed(self._layers):
-            if isinstance(layer, Group):
+            if isinstance(layer, (Group, _VectorShape)):
                 layer._get_refresh_areas(areas)
             elif isinstance(layer, TileGrid):
                 if not layer._get_rendered_hidden():
@@ -191,6 +195,8 @@ class Group:
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
                 layer._set_hidden_by_parent(hidden)  # pylint: disable=protected-access
+            elif isinstance(layer, _VectorShape):
+                layer._shape_set_dirty()  # pylint: disable=protected-access
 
     def _set_hidden_by_parent(self, hidden: bool) -> None:
         if self._hidden_by_parent == hidden:
@@ -201,6 +207,8 @@ class Group:
         for layer in self._layers:
             if isinstance(layer, (Group, TileGrid)):
                 layer._set_hidden_by_parent(hidden)  # pylint: disable=protected-access
+            elif isinstance(layer, _VectorShape):
+                layer._shape_set_dirty()  # pylint: disable=protected-access
 
     @property
     def hidden(self) -> bool:
