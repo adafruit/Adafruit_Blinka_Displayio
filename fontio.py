@@ -18,8 +18,8 @@ fontio for Blinka
 """
 
 import os
+from dataclasses import dataclass
 from typing import Union, Tuple, Optional
-from PIL import ImageFont
 from displayio import Bitmap
 
 try:
@@ -30,7 +30,7 @@ except ImportError:
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
-DEFAULT_FONT = "displayio/resources/ter-u12n.pil"
+DEFAULT_FONT = "displayio/resources/ter-u12n.bdf"
 
 
 class FontProtocol(Protocol):
@@ -55,50 +55,29 @@ class BuiltinFont:
     """Simulate a font built into CircuitPython"""
 
     def __init__(self):
-        self._font = ImageFont.load(os.path.dirname(__file__) + "/" + DEFAULT_FONT)
-        self._generate_bitmap(0x20, 0x7E)
+        self._width = 0
+        self._height = 0
 
-    def _generate_bitmap(self, start_range, end_range):
-        char_width, char_height = self.get_bounding_box()
-        self._bitmap = Bitmap(
-            char_width * (end_range - start_range + 1), char_height, 2
+        # Place import here to avoid circular import
+        from adafruit_bitmap_font import (  # pylint: disable=import-outside-toplevel
+            bitmap_font,
         )
-        for character in range(start_range, end_range + 1):
-            ascii_char = chr(character)
-            ascii_mask = self._font.getmask(ascii_char, mode="1")
-            for y in range(char_height):
-                for x in range(char_width):
-                    color = ascii_mask.getpixel((x, y))
-                    character_position = character - start_range
-                    self._bitmap[character_position * char_width + x, y] = (
-                        1 if color else 0
-                    )
 
-    def get_bounding_box(self):
+        self._font = bitmap_font.load_font(
+            os.path.dirname(__file__) + "/" + DEFAULT_FONT
+        )
+
+        self._font.load_glyphs(set(range(0x20, 0x7F)))
+
+    def get_bounding_box(self) -> Union[Tuple[int, int], Tuple[int, int, int, int]]:
         """Returns the maximum bounds of all glyphs in the font in
         a tuple of two values: width, height.
         """
-        return self._font.getbbox("M")[2:4]
+        return self._font.get_bounding_box()[0:2]
 
-    def get_glyph(self, codepoint):
+    def get_glyph(self, codepoint: int) -> Optional["Glyph"]:
         """Returns a `fontio.Glyph` for the given codepoint or None if no glyph is available."""
-        if 0x20 <= codepoint <= 0x7E:
-            glyph_index = codepoint - 0x20
-        else:
-            return None
-
-        bounding_box = self._font.getbbox(chr(codepoint))[2:4]
-        width, height = bounding_box
-        return Glyph(
-            bitmap=self._bitmap,
-            tile_index=glyph_index,
-            width=width,
-            height=height,
-            dx=0,
-            dy=0,
-            shift_x=width,
-            shift_y=0,
-        )
+        return self._font.get_glyph(codepoint)
 
     @property
     def bitmap(self):
@@ -106,22 +85,18 @@ class BuiltinFont:
         `get_glyph` in most cases. This is useful for use with `displayio.TileGrid` and
         `terminalio.Terminal`.
         """
-        return self._bitmap
+        return self._font.bitmap_class
 
 
-# pylint: disable=too-few-public-methods, invalid-name, too-many-arguments
+@dataclass
 class Glyph:
+    # pylint: disable=invalid-name
     """Storage of glyph info"""
-
-    def __init__(self, bitmap, tile_index, width, height, dx, dy, shift_x, shift_y):
-        self.bitmap = bitmap
-        self.width = width
-        self.height = height
-        self.dx = dx
-        self.dy = dy
-        self.shift_x = shift_x
-        self.shift_y = shift_y
-        self.tile_index = tile_index
-
-
-# pylint: enable=too-few-public-methods, invalid-name, too-many-arguments
+    bitmap: Bitmap
+    tile_index: int
+    width: int
+    height: int
+    dx: int
+    dy: int
+    shift_x: int
+    shift_y: int
