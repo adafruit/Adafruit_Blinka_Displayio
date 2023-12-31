@@ -42,7 +42,7 @@ dynamic = ["dependencies"]
 
 [tool.setuptools]
 py-modules = ["fontio", "terminalio", "paralleldisplay"]
-packages = ["displayio"]
+packages = ["displayio", "vectorio"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
