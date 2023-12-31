@@ -74,7 +74,7 @@ class FourWire:
 
         if reset is not None:
             self._reset = digitalio.DigitalInOut(reset)
-            self._reset.switch_to_output(value=False)
+            self._reset.switch_to_output(value=True)
         else:
             self._reset = None
         self._spi = spi_bus
