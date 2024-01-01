@@ -17,7 +17,7 @@ readme = "README.rst"
 authors = [
     {name = "Adafruit Industries", email = "circuitpython@adafruit.com"}
 ]
-urls = {Homepage = "https://github.com/adafruit/Adafruit_CircuitPython_SI1145.git"}
+urls = {Homepage = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"}
 keywords = [
     "adafruit",
     "blinka",
@@ -42,7 +42,7 @@ dynamic = ["dependencies"]
 
 [tool.setuptools]
 py-modules = ["fontio", "terminalio", "paralleldisplay"]
-packages = ["displayio"]
+packages = ["displayio", "vectorio"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
