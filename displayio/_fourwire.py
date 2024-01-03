@@ -44,7 +44,7 @@ class FourWire:
         spi_bus: busio.SPI,
         *,
         command: microcontroller.Pin,
-        chip_select: microcontroller.Pin,
+        chip_select: Optional[microcontroller.Pin] = None,
         reset: Optional[microcontroller.Pin] = None,
         baudrate: int = 24000000,
         polarity: int = 0,
@@ -61,8 +61,13 @@ class FourWire:
         """
         self._dc = digitalio.DigitalInOut(command)
         self._dc.switch_to_output(value=False)
-        self._chip_select = digitalio.DigitalInOut(chip_select)
-        self._chip_select.switch_to_output(value=True)
+
+        if chip_select is not None:
+            self._chip_select = digitalio.DigitalInOut(chip_select)
+            self._chip_select.switch_to_output(value=True)
+        else:
+            self._chip_select = None
+
         self._frequency = baudrate
         self._polarity = polarity
         self._phase = phase
@@ -78,7 +83,10 @@ class FourWire:
         self.reset()
         self._spi.deinit()
         self._dc.deinit()
-        self._chip_select.deinit()
+
+        if self._chip_select is not None:
+            self._chip_select.deinit()
+
         if self._reset is not None:
             self._reset.deinit()
 
@@ -123,7 +131,11 @@ class FourWire:
         data: ReadableBuffer,
     ):
         self._dc.value = data_type == DISPLAY_DATA
-        if chip_select == CHIP_SELECT_TOGGLE_EVERY_BYTE:
+
+        if (
+            self._chip_select is not None
+            and chip_select == CHIP_SELECT_TOGGLE_EVERY_BYTE
+        ):
             for byte in data:
                 self._spi.write(bytes([byte]))
                 self._chip_select.value = True
@@ -146,10 +158,15 @@ class FourWire:
         self._spi.configure(
             baudrate=self._frequency, polarity=self._polarity, phase=self._phase
         )
-        self._chip_select.value = False
+
+        if self._chip_select is not None:
+            self._chip_select.value = False
+
         return True
 
     def _end_transaction(self) -> None:
         """End the SPI transaction by unlocking and setting Chip Select"""
-        self._chip_select.value = True
+        if self._chip_select is not None:
+            self._chip_select.value = True
+
         self._spi.unlock()
