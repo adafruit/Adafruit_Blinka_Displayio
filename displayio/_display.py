@@ -212,7 +212,7 @@ class Display:
                 # 100Hz looks decent and doesn't keep the CPU too busy
                 self._backlight = PWMOut(backlight_pin, frequency=100, duty_cycle=0)
                 self._backlight_type = BACKLIGHT_PWM
-            except ImportError:
+            except (ImportError, NotImplementedError):
                 # PWMOut not implemented on this platform
                 pass
             if self._backlight_type is None:
