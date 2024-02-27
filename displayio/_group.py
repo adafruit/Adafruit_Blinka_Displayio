@@ -69,8 +69,12 @@ class Group:
             y = self._group_y
             if parent_transform.transpose_xy:
                 x, y = y, x
-            self._absolute_transform.x = parent_transform.x + parent_transform.dx * x
-            self._absolute_transform.y = parent_transform.y + parent_transform.dy * y
+            self._absolute_transform.x = int(
+                parent_transform.x + parent_transform.dx * x
+            )
+            self._absolute_transform.y = int(
+                parent_transform.y + parent_transform.dy * y
+            )
             self._absolute_transform.dx = parent_transform.dx * self._scale
             self._absolute_transform.dy = parent_transform.dy * self._scale
             self._absolute_transform.transpose_xy = parent_transform.transpose_xy
