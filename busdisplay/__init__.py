@@ -82,7 +82,7 @@ class BusDisplay:
         SH1107_addressing: bool = False,
     ):
         # pylint: disable=too-many-locals,invalid-name, too-many-branches
-        """Create a Display object on the given display bus (`displayio.FourWire` or
+        """Create a Display object on the given display bus (`fourwire.FourWire` or
         `paralleldisplay.ParallelBus`).
 
         The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins
@@ -101,7 +101,7 @@ class BusDisplay:
                 b"\\x11\\x80\\x78"  # Exit Sleep then delay 0x78 (120ms)
                 b"\\x29\\x80\\x78"  # Display on then delay 0x78 (120ms)
             )
-            display = displayio.Display(display_bus, init_sequence, width=320, height=240)
+            display = busdisplay.BusDisplay(display_bus, init_sequence, width=320, height=240)
 
         The first command is 0xE1 with 15 (0x0F) parameters following. The second and third
         are 0x11 and 0x29 respectively with delays (0x80) of 120ms (0x78) and no parameters.

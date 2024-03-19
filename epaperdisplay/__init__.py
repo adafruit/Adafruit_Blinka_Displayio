@@ -88,8 +88,8 @@ class EPaperDisplay:
         address_little_endian: bool = False,
     ) -> None:
         # pylint: disable=too-many-locals
-        """Create a EPaperDisplay object on the given display bus (`displayio.FourWire` or
-        `paralleldisplay.ParallelBus`).
+        """Create a EPaperDisplay object on the given display bus (`fourwire.FourWire` or
+        `paralleldisplaybus.ParallelBus`).
 
         The ``start_sequence`` and ``stop_sequence`` are bitpacked to minimize the ram impact. Every
         command begins with a command byte followed by a byte to determine the parameter count and
@@ -101,7 +101,7 @@ class EPaperDisplay:
         definition.
 
         :param display_bus: The bus that the display is connected to
-        :type _DisplayBus: displayio.FourWire or paralleldisplay.ParallelBus
+        :type _DisplayBus: fourwire.FourWire or paralleldisplay.ParallelBus
         :param ~circuitpython_typing.ReadableBuffer start_sequence: Byte-packed command sequence.
         :param ~circuitpython_typing.ReadableBuffer stop_sequence: Byte-packed command sequence.
         :param int width: Width in pixels
