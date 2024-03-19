@@ -24,13 +24,13 @@ import time
 import busio
 import digitalio
 from circuitpython_typing import ReadableBuffer
-from ._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
+from displayio._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
-class I2CDisplay:
+class I2CDisplayBus:
     """Manage updating a display over I2C in the background while Python code runs.
     It doesn’t handle display initialization.
     """
@@ -54,7 +54,7 @@ class I2CDisplay:
         self._dev_addr = device_address
 
     def __new__(cls, *args, **kwargs):
-        from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from ..displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display_bus,
         )
 

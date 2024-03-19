@@ -22,12 +22,12 @@ from typing import Optional, Union
 import microcontroller
 from digitalio import DigitalInOut
 from circuitpython_typing import ReadableBuffer
-from ._displaycore import _DisplayCore
-from ._group import Group, circuitpython_splash
-from ._colorconverter import ColorConverter
-from ._displaybus import _DisplayBus
-from ._area import Area
-from ._constants import (
+from displayio._displaycore import _DisplayCore
+from displayio._group import Group, circuitpython_splash
+from displayio._colorconverter import ColorConverter
+from busdisplay._displaybus import _DisplayBus
+from displayio._area import Area
+from displayio._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
     DISPLAY_COMMAND,
@@ -235,10 +235,10 @@ class EPaperDisplay:
         if highlight_color == 0x00 and write_color_ram_command != NO_COMMAND:
             """TODO: Clear"""
 
-        self.show(circuitpython_splash)
+        self._set_root_group(circuitpython_splash)
 
     def __new__(cls, *args, **kwargs):
-        from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from ..displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display,
         )
 
@@ -246,18 +246,8 @@ class EPaperDisplay:
         allocate_display(display_instance)
         return display_instance
 
-    def show(self, group: Group) -> None:
-        # pylint: disable=unnecessary-pass
-        """
-        .. note:: `show()` is deprecated and will be removed when CircuitPython 9.0.0
-          is released. Use ``.root_group = group`` instead.
-
-        Switches to displaying the given group of layers. When group is None, the default
-        CircuitPython terminal will be shown (eventually).
-        """
-        if group is None:
-            group = circuitpython_splash
-        self._core.set_root_group(group)
+    def show(self, _group: Group) -> None: # pylint: disable=missing-function-docstring
+        raise AttributeError(".show(x) removed. Use .root_group = x")
 
     def _set_root_group(self, root_group: Group) -> None:
         ok = self._core.set_root_group(root_group)

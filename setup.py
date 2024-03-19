@@ -56,6 +56,6 @@ setup(
     keywords="adafruit blinka circuitpython micropython displayio lcd tft display pitft",
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    py_modules=["fontio", "terminalio", "paralleldisplay"],
-    packages=["displayio", "vectorio"],
+    py_modules=["fontio", "terminalio"],
+    packages=["displayio", "vectorio", "paralleldisplaybus", "i2cdisplaybus", "fourwire", "busdisplay"],
 )

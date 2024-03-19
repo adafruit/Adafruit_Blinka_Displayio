@@ -25,13 +25,13 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 import time
 import struct
 from circuitpython_typing import WriteableBuffer, ReadableBuffer
-from paralleldisplay import ParallelBus
-from ._fourwire import FourWire
+from paralleldisplaybus import ParallelBus
+from fourwire import FourWire
 from ._group import Group
-from ._i2cdisplay import I2CDisplay
+from i2cdisplaybus import I2CDisplayBus
 from ._structs import ColorspaceStruct, TransformStruct
 from ._area import Area
-from ._displaybus import _DisplayBus
+from busdisplay._displaybus import _DisplayBus
 from ._helpers import bswap16
 from ._constants import (
     CHIP_SELECT_UNTOUCHED,
@@ -99,7 +99,7 @@ class _DisplayCore:
         self.last_refresh = 0
 
         if bus:
-            if isinstance(bus, (FourWire, I2CDisplay, ParallelBus)):
+            if isinstance(bus, (FourWire, I2CDisplayBus, ParallelBus)):
                 self._bus_reset = bus.reset
                 self._bus_free = bus._free
                 self._begin_transaction = bus._begin_transaction

@@ -18,19 +18,16 @@ displayio for Blinka
 """
 import threading
 from typing import Union
-from ._fourwire import FourWire
-from ._i2cdisplay import I2CDisplay
 from ._bitmap import Bitmap
 from ._colorspace import Colorspace
 from ._colorconverter import ColorConverter
-from ._display import Display
-from ._epaperdisplay import EPaperDisplay
+from busdisplay import BusDisplay
+from epaperdisplay import EPaperDisplay
 from ._group import Group
 from ._ondiskbitmap import OnDiskBitmap
 from ._palette import Palette
-from ._shape import Shape
 from ._tilegrid import TileGrid
-from ._displaybus import _DisplayBus
+from busdisplay._displaybus import _DisplayBus
 from ._constants import CIRCUITPY_DISPLAY_LIMIT
 
 __version__ = "0.0.0+auto.0"
@@ -63,7 +60,7 @@ def release_displays() -> None:
     display_buses.clear()
 
 
-def allocate_display(new_display: Union[Display, EPaperDisplay]) -> None:
+def allocate_display(new_display: Union[BusDisplay, EPaperDisplay]) -> None:
     """Add a display to the displays pool and return the new display"""
     if len(displays) >= CIRCUITPY_DISPLAY_LIMIT:
         raise RuntimeError("Too many displays")
