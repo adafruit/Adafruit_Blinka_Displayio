@@ -6,7 +6,7 @@
 `busdisplay._displaybus`
 ================================================================================
 
-Type aliases for Blinka
+DisplayBus Type aliases for Blinka
 
 **Software and Dependencies:**
 

@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.fourwire`
+`fourwire`
 ================================================================================
 
-displayio for Blinka
+fourwire for Blinka
 
 **Software and Dependencies:**
 

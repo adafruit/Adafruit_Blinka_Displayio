@@ -6,10 +6,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.i2cdisplay`
+`i2cdisplaybus`
 ================================================================================
 
-displayio for Blinka
+i2cdisplaybus for Blinka
 
 **Software and Dependencies:**
 

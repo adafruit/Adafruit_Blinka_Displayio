@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.epaperdisplay`
+`epaperdisplay`
 ================================================================================
 
-displayio for Blinka
+epaperdisplay for Blinka
 
 **Software and Dependencies:**
 

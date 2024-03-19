@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.display`
+`busdisplay`
 ================================================================================
 
-displayio for Blinka
+busdisplay for Blinka
 
 **Software and Dependencies:**
 
