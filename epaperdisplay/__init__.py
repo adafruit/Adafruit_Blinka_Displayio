@@ -161,6 +161,8 @@ class EPaperDisplay:
         self._refreshing = False
         color_depth = 1
         core_grayscale = True
+        # Disable while initializing
+        self._ticks_disabled = True
 
         if advanced_color_epaper:
             color_depth = 4
