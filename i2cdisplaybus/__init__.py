@@ -54,7 +54,7 @@ class I2CDisplayBus:
         self._dev_addr = device_address
 
     def __new__(cls, *args, **kwargs):
-        from ..displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display_bus,
         )
 

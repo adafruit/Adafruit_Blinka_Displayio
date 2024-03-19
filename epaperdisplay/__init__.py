@@ -22,10 +22,10 @@ from typing import Optional, Union
 import microcontroller
 from digitalio import DigitalInOut
 from circuitpython_typing import ReadableBuffer
+from busdisplay._displaybus import _DisplayBus
 from displayio._displaycore import _DisplayCore
 from displayio._group import Group, circuitpython_splash
 from displayio._colorconverter import ColorConverter
-from busdisplay._displaybus import _DisplayBus
 from displayio._area import Area
 from displayio._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
@@ -238,7 +238,7 @@ class EPaperDisplay:
         self._set_root_group(circuitpython_splash)
 
     def __new__(cls, *args, **kwargs):
-        from ..displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display,
         )
 
@@ -246,7 +246,8 @@ class EPaperDisplay:
         allocate_display(display_instance)
         return display_instance
 
-    def show(self, _group: Group) -> None: # pylint: disable=missing-function-docstring
+    @staticmethod
+    def show(_group: Group) -> None:  # pylint: disable=missing-function-docstring
         raise AttributeError(".show(x) removed. Use .root_group = x")
 
     def _set_root_group(self, root_group: Group) -> None:

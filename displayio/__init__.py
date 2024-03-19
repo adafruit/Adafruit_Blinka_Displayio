@@ -18,16 +18,16 @@ displayio for Blinka
 """
 import threading
 from typing import Union
+from busdisplay import BusDisplay
+from busdisplay._displaybus import _DisplayBus
+from epaperdisplay import EPaperDisplay
 from ._bitmap import Bitmap
 from ._colorspace import Colorspace
 from ._colorconverter import ColorConverter
-from busdisplay import BusDisplay
-from epaperdisplay import EPaperDisplay
 from ._group import Group
 from ._ondiskbitmap import OnDiskBitmap
 from ._palette import Palette
 from ._tilegrid import TileGrid
-from busdisplay._displaybus import _DisplayBus
 from ._constants import CIRCUITPY_DISPLAY_LIMIT
 
 __version__ = "0.0.0+auto.0"

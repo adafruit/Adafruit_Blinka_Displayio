@@ -27,11 +27,11 @@ import struct
 from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from paralleldisplaybus import ParallelBus
 from fourwire import FourWire
-from ._group import Group
 from i2cdisplaybus import I2CDisplayBus
+from busdisplay._displaybus import _DisplayBus
+from ._group import Group
 from ._structs import ColorspaceStruct, TransformStruct
 from ._area import Area
-from busdisplay._displaybus import _DisplayBus
 from ._helpers import bswap16
 from ._constants import (
     CHIP_SELECT_UNTOUCHED,

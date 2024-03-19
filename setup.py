@@ -57,5 +57,12 @@ setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     py_modules=["fontio", "terminalio"],
-    packages=["displayio", "vectorio", "paralleldisplaybus", "i2cdisplaybus", "fourwire", "busdisplay"],
+    packages=[
+        "displayio",
+        "vectorio",
+        "paralleldisplaybus",
+        "i2cdisplaybus",
+        "fourwire",
+        "busdisplay",
+    ],
 )

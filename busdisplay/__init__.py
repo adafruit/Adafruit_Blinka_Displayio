@@ -23,7 +23,6 @@ import digitalio
 import microcontroller
 from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from displayio._displaycore import _DisplayCore
-from ._displaybus import _DisplayBus
 from displayio._colorconverter import ColorConverter
 from displayio._group import Group, circuitpython_splash
 from displayio._area import Area
@@ -37,6 +36,7 @@ from displayio._constants import (
     NO_COMMAND,
     DELAY,
 )
+from ._displaybus import _DisplayBus
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -225,7 +225,7 @@ class BusDisplay:
         self.auto_refresh = auto_refresh
 
     def __new__(cls, *args, **kwargs):
-        from ..displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display,
         )
 
@@ -242,7 +242,8 @@ class BusDisplay:
             )
         self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels)
 
-    def show(self, _group: Group) -> None: # pylint: disable=missing-function-docstring
+    @staticmethod
+    def show(_group: Group) -> None:  # pylint: disable=missing-function-docstring
         raise AttributeError(".show(x) removed. Use .root_group = x")
 
     def _set_root_group(self, root_group: Group) -> None:
