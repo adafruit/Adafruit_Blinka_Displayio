@@ -101,7 +101,7 @@ class EPaperDisplay:
         definition.
 
         :param display_bus: The bus that the display is connected to
-        :type _DisplayBus: fourwire.FourWire or paralleldisplay.ParallelBus
+        :type _DisplayBus: fourwire.FourWire or paralleldisplaybus.ParallelBus
         :param ~circuitpython_typing.ReadableBuffer start_sequence: Byte-packed command sequence.
         :param ~circuitpython_typing.ReadableBuffer stop_sequence: Byte-packed command sequence.
         :param int width: Width in pixels

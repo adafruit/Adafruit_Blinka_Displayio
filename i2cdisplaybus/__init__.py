@@ -36,7 +36,7 @@ class I2CDisplayBus:
     """
 
     def __init__(self, i2c_bus: busio.I2C, *, device_address: int, reset=None):
-        """Create a I2CDisplay object associated with the given I2C bus and reset pin.
+        """Create a I2CDisplayBus object associated with the given I2C bus and reset pin.
 
         The I2C bus and pins are then in use by the display until displayio.release_displays() is
         called even after a reload. (It does this so CircuitPython can use the display after your

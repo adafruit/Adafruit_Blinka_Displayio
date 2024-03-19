@@ -83,7 +83,7 @@ class BusDisplay:
     ):
         # pylint: disable=too-many-locals,invalid-name, too-many-branches
         """Create a Display object on the given display bus (`fourwire.FourWire` or
-        `paralleldisplay.ParallelBus`).
+        `paralleldisplaybus.ParallelBus`).
 
         The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins
         with a command byte followed by a byte to determine the parameter count and if a
