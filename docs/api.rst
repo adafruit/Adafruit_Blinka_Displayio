@@ -6,8 +6,7 @@
 
 
 .. automodule:: displayio
-    :members: Bitmap, ColorConverter, Display, EPaperDisplay, FourWire, Group, I2CDisplay,
-        OnDiskBitmap, Palette, Shape, TileGrid
+    :members: Bitmap, ColorConverter, Group, OnDiskBitmap, Palette, TileGrid
 
 .. automodule:: fontio
     :members:
@@ -15,5 +14,14 @@
 .. automodule:: terminalio
     :members:
 
-.. automodule:: paralleldisplay
+.. automodule:: paralleldisplaybus
+    :members:
+
+.. automodule:: i2cdisplaybus
+    :members:
+
+.. automodule:: fourwire
+    :members:
+
+.. automodule:: busdisplay
     :members:

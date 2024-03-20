@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio._displaybus`
+`busdisplay._displaybus`
 ================================================================================
 
-Type aliases for Blinka
+DisplayBus Type aliases for Blinka
 
 **Software and Dependencies:**
 
@@ -18,11 +18,13 @@ Type aliases for Blinka
 """
 
 from typing import Union
-import paralleldisplay
-from ._fourwire import FourWire
-from ._i2cdisplay import I2CDisplay
+import paralleldisplaybus
+import fourwire
+import i2cdisplaybus
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
-_DisplayBus = Union[FourWire, I2CDisplay, paralleldisplay.ParallelBus]
+_DisplayBus = Union[
+    fourwire.FourWire, i2cdisplaybus.I2CDisplayBus, paralleldisplaybus.ParallelBus
+]

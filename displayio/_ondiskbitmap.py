@@ -35,9 +35,6 @@ class OnDiskBitmap:
     load times. These load times may result in frame tearing where only part of the image is
     visible.
 
-    It's easiest to use on a board with a built in display such as the `Hallowing M0 Express
-    <https://www.adafruit.com/product/3900>`_.
-
     .. code-block:: Python
 
         import board
@@ -48,7 +45,7 @@ class OnDiskBitmap:
         board.DISPLAY.auto_brightness = False
         board.DISPLAY.brightness = 0
         splash = displayio.Group()
-        board.DISPLAY.show(splash)
+        board.DISPLAY.root_group = splash
 
         odb = displayio.OnDiskBitmap(\'/sample.bmp\')
         face = displayio.TileGrid(odb, pixel_shader=odb.pixel_shader)

@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.display`
+`busdisplay`
 ================================================================================
 
-displayio for Blinka
+busdisplay for Blinka
 
 **Software and Dependencies:**
 
@@ -22,12 +22,11 @@ from typing import Optional
 import digitalio
 import microcontroller
 from circuitpython_typing import WriteableBuffer, ReadableBuffer
-from ._displaycore import _DisplayCore
-from ._displaybus import _DisplayBus
-from ._colorconverter import ColorConverter
-from ._group import Group, circuitpython_splash
-from ._area import Area
-from ._constants import (
+from displayio._displaycore import _DisplayCore
+from displayio._colorconverter import ColorConverter
+from displayio._group import Group, circuitpython_splash
+from displayio._area import Area
+from displayio._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
     DISPLAY_COMMAND,
@@ -37,12 +36,13 @@ from ._constants import (
     NO_COMMAND,
     DELAY,
 )
+from ._displaybus import _DisplayBus
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
-class Display:
+class BusDisplay:
     # pylint: disable=too-many-instance-attributes, too-many-statements
     """This initializes a display and connects it into CircuitPython. Unlike other objects
     in CircuitPython, Display objects live until ``displayio.release_displays()`` is called.
@@ -82,8 +82,8 @@ class Display:
         SH1107_addressing: bool = False,
     ):
         # pylint: disable=too-many-locals,invalid-name, too-many-branches
-        """Create a Display object on the given display bus (`displayio.FourWire` or
-        `paralleldisplay.ParallelBus`).
+        """Create a Display object on the given display bus (`fourwire.FourWire` or
+        `paralleldisplaybus.ParallelBus`).
 
         The ``init_sequence`` is bitpacked to minimize the ram impact. Every command begins
         with a command byte followed by a byte to determine the parameter count and if a
@@ -101,7 +101,7 @@ class Display:
                 b"\\x11\\x80\\x78"  # Exit Sleep then delay 0x78 (120ms)
                 b"\\x29\\x80\\x78"  # Display on then delay 0x78 (120ms)
             )
-            display = displayio.Display(display_bus, init_sequence, width=320, height=240)
+            display = busdisplay.BusDisplay(display_bus, init_sequence, width=320, height=240)
 
         The first command is 0xE1 with 15 (0x0F) parameters following. The second and third
         are 0x11 and 0x29 respectively with delays (0x80) of 120ms (0x78) and no parameters.
@@ -225,7 +225,7 @@ class Display:
         self.auto_refresh = auto_refresh
 
     def __new__(cls, *args, **kwargs):
-        from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display,
         )
 
@@ -242,19 +242,9 @@ class Display:
             )
         self._core.send(DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels)
 
-    def show(self, group: Group) -> None:
-        """
-        .. note:: `show()` is deprecated and will be removed when CircuitPython 9.0.0
-          is released. Use ``.root_group = group`` instead.
-
-        Switches to displaying the given group of layers. When group is None, the
-        default CircuitPython terminal will be shown.
-
-        :param Group group: The group to show.
-        """
-        if group is None:
-            group = circuitpython_splash
-        self._core.set_root_group(group)
+    @staticmethod
+    def show(_group: Group) -> None:  # pylint: disable=missing-function-docstring
+        raise AttributeError(".show(x) removed. Use .root_group = x")
 
     def _set_root_group(self, root_group: Group) -> None:
         ok = self._core.set_root_group(root_group)

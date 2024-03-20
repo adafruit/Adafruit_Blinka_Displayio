@@ -6,10 +6,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.i2cdisplay`
+`i2cdisplaybus`
 ================================================================================
 
-displayio for Blinka
+i2cdisplaybus for Blinka
 
 **Software and Dependencies:**
 
@@ -24,19 +24,19 @@ import time
 import busio
 import digitalio
 from circuitpython_typing import ReadableBuffer
-from ._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
+from displayio._constants import CHIP_SELECT_UNTOUCHED, DISPLAY_COMMAND
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
-class I2CDisplay:
+class I2CDisplayBus:
     """Manage updating a display over I2C in the background while Python code runs.
     It doesn’t handle display initialization.
     """
 
     def __init__(self, i2c_bus: busio.I2C, *, device_address: int, reset=None):
-        """Create a I2CDisplay object associated with the given I2C bus and reset pin.
+        """Create a I2CDisplayBus object associated with the given I2C bus and reset pin.
 
         The I2C bus and pins are then in use by the display until displayio.release_displays() is
         called even after a reload. (It does this so CircuitPython can use the display after your
@@ -54,7 +54,7 @@ class I2CDisplay:
         self._dev_addr = device_address
 
     def __new__(cls, *args, **kwargs):
-        from . import (  # pylint: disable=import-outside-toplevel, cyclic-import
+        from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display_bus,
         )
 

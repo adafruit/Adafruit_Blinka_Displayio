@@ -23,7 +23,6 @@ from circuitpython_typing import WriteableBuffer
 from ._bitmap import Bitmap
 from ._colorconverter import ColorConverter
 from ._ondiskbitmap import OnDiskBitmap
-from ._shape import Shape
 from ._palette import Palette
 from ._structs import (
     InputPixelStruct,
@@ -47,7 +46,7 @@ class TileGrid:
 
     def __init__(
         self,
-        bitmap: Union[Bitmap, OnDiskBitmap, Shape],
+        bitmap: Union[Bitmap, OnDiskBitmap],
         *,
         pixel_shader: Union[ColorConverter, Palette],
         width: int = 1,
@@ -64,7 +63,7 @@ class TileGrid:
 
         tile_width and tile_height match the height of the bitmap by default.
         """
-        if not isinstance(bitmap, (Bitmap, OnDiskBitmap, Shape)):
+        if not isinstance(bitmap, (Bitmap, OnDiskBitmap)):
             raise ValueError("Unsupported Bitmap type")
         self._bitmap = bitmap
         bitmap_width = bitmap.width
@@ -341,7 +340,7 @@ class TileGrid:
 
                 # We always want to read bitmap pixels by row first and then transpose into
                 # the destination buffer because most bitmaps are row associated.
-                if isinstance(self._bitmap, (Bitmap, Shape, OnDiskBitmap)):
+                if isinstance(self._bitmap, (Bitmap, OnDiskBitmap)):
                     input_pixel.pixel = (
                         self._bitmap._get_pixel(  # pylint: disable=protected-access
                             input_pixel.tile_x, input_pixel.tile_y
@@ -417,7 +416,7 @@ class TileGrid:
         self._partial_change = False
         if isinstance(self._pixel_shader, (Palette, ColorConverter)):
             self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
-        if isinstance(self._bitmap, (Bitmap, Shape)):
+        if isinstance(self._bitmap, Bitmap):
             self._bitmap._finish_refresh()  # pylint: disable=protected-access
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
@@ -453,12 +452,6 @@ class TileGrid:
                     self._partial_change = True
                 else:
                     self._full_change = True
-        elif isinstance(self._bitmap, Shape):
-            self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
-            refresh_area = areas[-1] if areas else None
-            if refresh_area != tail:
-                refresh_area.copy_into(self._dirty_area)
-                self._partial_change = True
 
         self._full_change = self._full_change or (
             isinstance(self._pixel_shader, (Palette, ColorConverter))
@@ -669,19 +662,17 @@ class TileGrid:
         self._full_change = True
 
     @property
-    def bitmap(self) -> Union[Bitmap, OnDiskBitmap, Shape]:
-        """The Bitmap, OnDiskBitmap, or Shape that is assigned to this TileGrid"""
+    def bitmap(self) -> Union[Bitmap, OnDiskBitmap]:
+        """The Bitmap or OnDiskBitmap that is assigned to this TileGrid"""
         return self._bitmap
 
     @bitmap.setter
-    def bitmap(self, new_bitmap: Union[Bitmap, OnDiskBitmap, Shape]) -> None:
-        if (
-            not isinstance(new_bitmap, Bitmap)
-            and not isinstance(new_bitmap, OnDiskBitmap)
-            and not isinstance(new_bitmap, Shape)
+    def bitmap(self, new_bitmap: Union[Bitmap, OnDiskBitmap]) -> None:
+        if not isinstance(new_bitmap, Bitmap) and not isinstance(
+            new_bitmap, OnDiskBitmap
         ):
             raise TypeError(
-                "Unsupported Type: new_bitmap must be Bitmap, OnDiskBitmap, or Shape"
+                "Unsupported Type: new_bitmap must be Bitmap or OnDiskBitmap"
             )
 
         if (

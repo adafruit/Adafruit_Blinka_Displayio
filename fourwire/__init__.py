@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`displayio.fourwire`
+`fourwire`
 ================================================================================
 
-displayio for Blinka
+fourwire for Blinka
 
 **Software and Dependencies:**
 
@@ -23,7 +23,7 @@ import digitalio
 import busio
 import microcontroller
 from circuitpython_typing import ReadableBuffer
-from ._constants import (
+from displayio._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
     DISPLAY_COMMAND,

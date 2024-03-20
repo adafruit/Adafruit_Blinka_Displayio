@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """
-`paralleldisplay`
+`paralleldisplaybus`
 ================================================================================
 
-paralleldisplay for Blinka
+paralleldisplaybus for Blinka
 
 **Software and Dependencies:**
 

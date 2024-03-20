@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2023 Melissa LeBlanc-Williams, written for Adafruit Industries
+#
+# SPDX-License-Identifier: MIT
+
+change-template: "- $TITLE #$NUMBER by @$AUTHOR"
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  To use in CPython, `pip3 install adafruit-blinka-displayio`.
+
+  Read the [docs](https://adafruit-blinka-displayio.readthedocs.io/en/latest/)) for info on how to use it.
