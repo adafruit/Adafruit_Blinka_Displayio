@@ -64,5 +64,6 @@ setup(
         "i2cdisplaybus",
         "fourwire",
         "busdisplay",
+        "epaperdisplay",
     ],
 )
