@@ -41,8 +41,8 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [tool.setuptools]
-py-modules = ["fontio", "terminalio", "paralleldisplay"]
-packages = ["displayio", "vectorio"]
+py-modules = ["fontio", "terminalio"]
+packages = ["displayio", "vectorio", "paralleldisplaybus", "i2cdisplaybus", "fourwire", "busdisplay"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
