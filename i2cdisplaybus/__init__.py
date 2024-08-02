@@ -87,7 +87,9 @@ class I2CDisplayBus:
         done.
         """
         self._begin_transaction()
-        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + data))
+        # re-wrap in case of byte-string
+        buffer = list(data) if isinstance(data, bytes) else data
+        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + buffer))
         self._end_transaction()
 
     def _send(
