@@ -86,10 +86,14 @@ class I2CDisplayBus:
         such as vertical scroll, set via ``send`` may or may not be reset once the code is
         done.
         """
+
+        # prepend the command to the data buffer
+        buffer = bytearray(len(data) + 1)
+        buffer[0] = command & 0xFF
+        buffer[1:] = data
+
         self._begin_transaction()
-        # re-wrap in case of byte-string
-        buffer = list(data) if isinstance(data, bytes) else data
-        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + buffer))
+        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, buffer)
         self._end_transaction()
 
     def _send(
