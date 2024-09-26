@@ -20,6 +20,7 @@ import threading
 from typing import Union
 
 import fourwire
+import i2cdisplaybus
 from busdisplay import BusDisplay
 from busdisplay._displaybus import _DisplayBus
 from epaperdisplay import EPaperDisplay
@@ -36,6 +37,7 @@ from ._constants import CIRCUITPY_DISPLAY_LIMIT
 # when compatibility is removed from core displayio
 Display = BusDisplay
 FourWire = fourwire.FourWire
+I2CDisplay = i2cdisplaybus.I2CDisplayBus
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
