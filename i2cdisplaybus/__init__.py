@@ -21,6 +21,8 @@ i2cdisplaybus for Blinka
 """
 
 import time
+from typing import Optional
+
 import busio
 import digitalio
 from circuitpython_typing import ReadableBuffer
@@ -98,18 +100,23 @@ class I2CDisplayBus:
         data_type: int,
         _chip_select: int,  # Chip select behavior
         data: ReadableBuffer,
-        command: int,
+        command: Optional[int] = None,
     ):
         if data_type == DISPLAY_COMMAND:
-            n = len(data) + 1
+            n = len(data)
+            if command is not None:
+                n += 1
             if n > 0:
                 command_bytes = bytearray(n * 2)
                 for i in range(n):
                     command_bytes[2 * i] = 0x80
-                    if i > 0:
-                        command_bytes[2 * i + 1] = data[i]
+                    if command is not None:
+                        if i > 0:
+                            command_bytes[2 * i + 1] = data[i]
+                        else:
+                            command_bytes[2 * i + 1] = command
                     else:
-                        command_bytes[2 * i + 1] = command
+                        command_bytes[2 * i + 1] = data[i]
 
             try:
                 self._i2c.writeto(self._dev_addr, buffer=command_bytes)
@@ -120,10 +127,16 @@ class I2CDisplayBus:
                     ) from error
                 raise error
         else:
-            data_bytes = bytearray(len(data) + 2)
+            size = len(data) + 1
+            if command is not None:
+                size += 1
+            data_bytes = bytearray(size)
             data_bytes[0] = 0x40
-            data_bytes[1] = command
-            data_bytes[2:] = data
+            if command is not None:
+                data_bytes[1] = command
+                data_bytes[2:] = data
+            else:
+                data_bytes[1:] = data
             try:
                 self._i2c.writeto(self._dev_addr, buffer=data_bytes)
             except OSError as error:
