@@ -88,8 +88,9 @@ class I2CDisplayBus:
         """
         self._begin_transaction()
         # re-wrap in case of byte-string
-        buffer = list(data) if isinstance(data, bytes) else data
-        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + buffer))
+        #buffer = list(data) if isinstance(data, bytes) else data
+        #self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, bytes([command] + buffer))
+        self._send(DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, data, command)
         self._end_transaction()
 
     def _send(
@@ -97,14 +98,18 @@ class I2CDisplayBus:
         data_type: int,
         _chip_select: int,  # Chip select behavior
         data: ReadableBuffer,
+        command: int,
     ):
         if data_type == DISPLAY_COMMAND:
-            n = len(data)
+            n = len(data) + 1
             if n > 0:
                 command_bytes = bytearray(n * 2)
                 for i in range(n):
                     command_bytes[2 * i] = 0x80
-                    command_bytes[2 * i + 1] = data[i]
+                    if i > 0:
+                        command_bytes[2 * i + 1] = data[i]
+                    else:
+                        command_bytes[2 * i + 1] = command
 
             try:
                 self._i2c.writeto(self._dev_addr, buffer=command_bytes)
@@ -115,9 +120,10 @@ class I2CDisplayBus:
                     ) from error
                 raise error
         else:
-            data_bytes = bytearray(len(data) + 1)
+            data_bytes = bytearray(len(data) + 2)
             data_bytes[0] = 0x40
-            data_bytes[1:] = data
+            data_bytes[1] = command
+            data_bytes[2:] = data
             try:
                 self._i2c.writeto(self._dev_addr, buffer=data_bytes)
             except OSError as error:
