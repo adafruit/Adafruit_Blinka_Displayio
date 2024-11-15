@@ -99,6 +99,7 @@ class I2CDisplayBus:
         data: ReadableBuffer,
         command: Optional[int] = None,
     ):
+        # pylint: disable=too-many-branches
         if data_type == DISPLAY_COMMAND:
             n = len(data)
             if command is not None:
