@@ -57,8 +57,8 @@ class Bitmap:
         the Bitmap.
         """
 
-        if not 1 <= value_count <= 65535:
-            raise ValueError("value_count must be in the range of 1-65535")
+        if not 1 <= value_count <= 65536:
+            raise ValueError("value_count must be in the range of 1-65536")
 
         bits = 1
         while (value_count - 1) >> bits:
