@@ -245,12 +245,12 @@ class Group:
         if not isinstance(value, int) or value < 1:
             raise ValueError("Scale must be >= 1")
         if self._scale != value:
-            parent_scale = self._absolute_transform.scale / self._scale
+            parent_scale = self._absolute_transform.scale // self._scale
             self._absolute_transform.dx = (
-                self._absolute_transform.dx / self._scale * value
+                self._absolute_transform.dx // self._scale * value
             )
             self._absolute_transform.dy = (
-                self._absolute_transform.dy / self._scale * value
+                self._absolute_transform.dy // self._scale * value
             )
             self._absolute_transform.scale = parent_scale * value
 
@@ -268,10 +268,10 @@ class Group:
             raise ValueError("x must be an integer")
         if self._group_x != value:
             if self._absolute_transform.transpose_xy:
-                dy_value = self._absolute_transform.dy / self._scale
+                dy_value = self._absolute_transform.dy // self._scale
                 self._absolute_transform.y += dy_value * (value - self._group_x)
             else:
-                dx_value = self._absolute_transform.dx / self._scale
+                dx_value = self._absolute_transform.dx // self._scale
                 self._absolute_transform.x += dx_value * (value - self._group_x)
             self._group_x = value
             self._update_child_transforms()
@@ -287,10 +287,10 @@ class Group:
             raise ValueError("y must be an integer")
         if self._group_y != value:
             if self._absolute_transform.transpose_xy:
-                dx_value = self._absolute_transform.dx / self._scale
+                dx_value = self._absolute_transform.dx // self._scale
                 self._absolute_transform.x += dx_value * (value - self._group_y)
             else:
-                dy_value = self._absolute_transform.dy / self._scale
+                dy_value = self._absolute_transform.dy // self._scale
                 self._absolute_transform.y += dy_value * (value - self._group_y)
             self._group_y = value
             self._update_child_transforms()
