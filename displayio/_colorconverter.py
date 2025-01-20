@@ -206,7 +206,14 @@ class ColorConverter:
             self._cached_output_color = output_color.pixel
 
     @staticmethod
+    def _rgbtuple_to_hex(color_tuple):
+        """Convert rgb tuple with 0-255 values to hex color value"""
+        return color_tuple[0] << 16 | color_tuple[1] << 8 | color_tuple[2]
+
+    @staticmethod
     def _convert_pixel(colorspace: Colorspace, pixel: int) -> int:
+        if isinstance(pixel, tuple):
+            pixel = ColorConverter._rgbtuple_to_hex(pixel)
         pixel = clamp(pixel, 0, 0xFFFFFFFF)
         if colorspace in (
             Colorspace.RGB565_SWAPPED,
