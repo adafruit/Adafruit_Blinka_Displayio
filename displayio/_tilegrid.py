@@ -120,6 +120,7 @@ class TileGrid:
         self._tiles_in_bitmap = self._bitmap_width_in_tiles * (
             bitmap_height // tile_height
         )
+        self._needs_refresh = True
 
     def _update_transform(self, absolute_transform):
         """Update the parent transform and child transforms"""
@@ -131,6 +132,7 @@ class TileGrid:
             self._update_current_y()
 
     def _update_current_x(self):
+        self._needs_refresh = True
         if self._transpose_xy:
             width = self._pixel_height
         else:
@@ -168,6 +170,7 @@ class TileGrid:
                 )
 
     def _update_current_y(self):
+        self._needs_refresh = True
         if self._transpose_xy:
             height = self._pixel_width
         else:
@@ -404,20 +407,21 @@ class TileGrid:
         return full_coverage
 
     def _finish_refresh(self):
-        first_draw = self._previous_area.x1 == self._previous_area.x2
-        hidden = self._hidden_tilegrid or self._hidden_by_parent
-        if not first_draw and hidden:
-            self._previous_area.x2 = self._previous_area.x1
-        elif self._moved or first_draw:
-            self._current_area.copy_into(self._previous_area)
+        if not self._needs_refresh:
+            first_draw = self._previous_area.x1 == self._previous_area.x2
+            hidden = self._hidden_tilegrid or self._hidden_by_parent
+            if not first_draw and hidden:
+                self._previous_area.x2 = self._previous_area.x1
+            elif self._moved or first_draw:
+                self._current_area.copy_into(self._previous_area)
 
-        self._moved = False
-        self._full_change = False
-        self._partial_change = False
-        if isinstance(self._pixel_shader, (Palette, ColorConverter)):
-            self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
-        if isinstance(self._bitmap, Bitmap):
-            self._bitmap._finish_refresh()  # pylint: disable=protected-access
+            self._moved = False
+            self._full_change = False
+            self._partial_change = False
+            if isinstance(self._pixel_shader, (Palette, ColorConverter)):
+                self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
+            if isinstance(self._bitmap, Bitmap):
+                self._bitmap._finish_refresh()  # pylint: disable=protected-access
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         # pylint: disable=invalid-name, too-many-branches, too-many-statements
@@ -429,14 +433,17 @@ class TileGrid:
             self._rendered_hidden = True
             if not first_draw:
                 areas.append(self._previous_area)
+            self._needs_refresh = False
             return
         if self._moved and not first_draw:
             self._previous_area.union(self._current_area, self._dirty_area)
             if self._dirty_area.size() < 2 * self._pixel_width * self._pixel_height:
                 areas.append(self._dirty_area)
+                self._needs_refresh = False
                 return
             areas.append(self._current_area)
             areas.append(self._previous_area)
+            self._needs_refresh = False
             return
 
         tail = areas[-1] if areas else None
@@ -459,6 +466,7 @@ class TileGrid:
         )
         if self._full_change or first_draw:
             areas.append(self._current_area)
+            self._needs_refresh = False
             return
 
         if self._partial_change:
@@ -502,14 +510,17 @@ class TileGrid:
                     self._dirty_area.x1,
                 )
             areas.append(self._dirty_area)
+        self._needs_refresh = False
 
     def _set_hidden(self, hidden: bool) -> None:
+        self._needs_refresh = True
         self._hidden_tilegrid = hidden
         self._rendered_hidden = False
         if not hidden:
             self._full_change = True
 
     def _set_hidden_by_parent(self, hidden: bool) -> None:
+        self._needs_refresh = True
         self._hidden_by_parent = hidden
         self._rendered_hidden = False
         if not hidden:
@@ -528,6 +539,7 @@ class TileGrid:
         self._full_change = True
 
     def _set_tile(self, x: int, y: int, tile_index: int) -> None:
+        self._needs_refresh = True
         self._tiles[y * self._width_in_tiles + x] = tile_index
         temp_area = Area()
         if not self._partial_change:
@@ -608,6 +620,7 @@ class TileGrid:
         if not isinstance(value, bool):
             raise TypeError("Flip X should be a boolean type")
         if self._flip_x != value:
+            self._needs_refresh = True
             self._flip_x = value
             self._full_change = True
 
@@ -621,6 +634,7 @@ class TileGrid:
         if not isinstance(value, bool):
             raise TypeError("Flip Y should be a boolean type")
         if self._flip_y != value:
+            self._needs_refresh = True
             self._flip_y = value
             self._full_change = True
 
@@ -636,6 +650,7 @@ class TileGrid:
         if not isinstance(value, bool):
             raise TypeError("Transpose XY should be a boolean type")
         if self._transpose_xy != value:
+            self._needs_refresh = True
             self._transpose_xy = value
             if self._pixel_width == self._pixel_height:
                 self._full_change = True
@@ -660,6 +675,7 @@ class TileGrid:
 
         self._pixel_shader = new_pixel_shader
         self._full_change = True
+        self._needs_refresh = True
 
     @property
     def bitmap(self) -> Union[Bitmap, OnDiskBitmap]:
@@ -681,6 +697,7 @@ class TileGrid:
         ):
             raise ValueError("New bitmap must be same size as old bitmap")
 
+        self._needs_refresh = True
         self._bitmap = new_bitmap
         self._full_change = True
 
