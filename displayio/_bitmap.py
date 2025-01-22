@@ -199,10 +199,6 @@ class Bitmap:
             elif bytes_per_value == 4:
                 struct.pack_into("<I", row, x * 4, value)
 
-    def _finish_refresh(self):
-        self._dirty_area.x1 = 0
-        self._dirty_area.x2 = 0
-
     def fill(self, value: int) -> None:
         """Fills the bitmap with the supplied palette index value."""
         if self._read_only:
