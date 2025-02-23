@@ -53,8 +53,8 @@ def _background(stop_event):
     while not stop_event.is_set():
         for display in displays:
             display._background()  # pylint: disable=protected-access
-    
-        # relax system when _background does nothing 
+
+        # relax system when _background does nothing
         # and we are in a while True loop consuming lots of CPU
         time.sleep(0.0)
 
@@ -91,7 +91,9 @@ def allocate_display_bus(new_display_bus: _DisplayBus) -> None:
 
 
 background_thread_stop_event = threading.Event()
-background_thread = threading.Thread(target=_background,args=(background_thread_stop_event,), daemon=True)
+background_thread = threading.Thread(
+    target=_background, args=(background_thread_stop_event,), daemon=True
+)
 
 
 # Start the background thread
