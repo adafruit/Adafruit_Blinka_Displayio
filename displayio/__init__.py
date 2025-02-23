@@ -17,6 +17,7 @@ displayio for Blinka
 
 """
 import threading
+import time
 from typing import Union
 
 import fourwire
@@ -47,11 +48,15 @@ displays = []
 display_buses = []
 
 
-def _background():
+def _background(stop_event):
     """Main thread function to loop through all displays and update them"""
-    while True:
+    while not stop_event.is_set():
         for display in displays:
             display._background()  # pylint: disable=protected-access
+    
+        # relax system when _background does nothing 
+        # and we are in a while True loop consuming lots of CPU
+        time.sleep(0.0)
 
 
 def release_displays() -> None:
@@ -85,7 +90,8 @@ def allocate_display_bus(new_display_bus: _DisplayBus) -> None:
     display_buses.append(new_display_bus)
 
 
-background_thread = threading.Thread(target=_background, daemon=True)
+background_thread_stop_event = threading.Event()
+background_thread = threading.Thread(target=_background,args=(background_thread_stop_event,), daemon=True)
 
 
 # Start the background thread
@@ -96,6 +102,7 @@ def _start_background():
 
 def _stop_background():
     if background_thread.is_alive():
+        background_thread_stop_event.set()
         # Stop the thread
         background_thread.join()
 
