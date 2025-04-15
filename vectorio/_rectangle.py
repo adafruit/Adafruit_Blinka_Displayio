@@ -38,6 +38,7 @@ class Rectangle(_VectorShape):
         height: int,
         x: int,
         y: int,
+        color_index: int = 0,
     ):
         """Represents a rectangle by defining its bounds
 
@@ -51,7 +52,7 @@ class Rectangle(_VectorShape):
         """
         self._width = 1
         self._height = 1
-        self._color_index = 1
+        self._color_index = color_index + 1
 
         super().__init__(pixel_shader, x, y)
         self.width = width
