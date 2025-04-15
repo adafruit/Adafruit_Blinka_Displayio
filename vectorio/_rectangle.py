@@ -38,6 +38,7 @@ class Rectangle(_VectorShape):
         height: int,
         x: int,
         y: int,
+        color_index: int = 0,
     ):
         """Represents a rectangle by defining its bounds
 
@@ -51,7 +52,7 @@ class Rectangle(_VectorShape):
         """
         self._width = 1
         self._height = 1
-        self._color_index = 1
+        self._color_index = color_index
 
         super().__init__(pixel_shader, x, y)
         self.width = width
@@ -85,11 +86,11 @@ class Rectangle(_VectorShape):
     @property
     def color_index(self) -> int:
         """The color_index of the rectangle as 0 based index of the palette."""
-        return self._color_index - 1
+        return self._color_index
 
     @color_index.setter
     def color_index(self, value: int) -> None:
-        self._color_index = abs(value + 1)
+        self._color_index = abs(value)
         self._shape_set_dirty()
 
     def _get_pixel(self, x: int, y: int) -> int:
