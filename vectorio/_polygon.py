@@ -17,7 +17,7 @@ vectorio Polygon for Blinka
 
 """
 
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 from displayio._colorconverter import ColorConverter
 from displayio._palette import Palette
 from displayio._area import Area
@@ -34,7 +34,7 @@ class Polygon(_VectorShape):
         self,
         *,
         pixel_shader: Union[ColorConverter, Palette],
-        points: list | Tuple[int, int],
+        points: List[Tuple[int, int]],
         x: int,
         y: int,
     ):
@@ -54,12 +54,12 @@ class Polygon(_VectorShape):
         self.points = points
 
     @property
-    def points(self) -> list | Tuple[int, int]:
+    def points(self) -> List[Tuple[int, int]]:
         """The points of the polygon in pixels"""
         return self._points
 
     @points.setter
-    def points(self, value: list | Tuple[int, int]) -> None:
+    def points(self, value: List[Tuple[int, int]]) -> None:
         if len(value) < 3:
             raise ValueError("Polygon needs at least 3 points")
         self._points = value
