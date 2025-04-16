@@ -216,3 +216,24 @@ def rotozoom(
             v += dv_row
         rowu += du_col
         rowv += dv_col
+
+
+def arrayblit(
+        bitmap: Bitmap,
+        data: circuitpython_typing.ReadableBuffer,
+        x1: int = 0, y1: int = 0,
+        x2: int | None = None, y2: int | None = None,
+        skip_index: int | None = None):
+
+    if x2 is None:
+        x2 = bitmap.width
+    if y2 is None:
+        y2 = bitmap.height
+
+    _value_count = 2 ** bitmap._bits_per_value
+    for y in range(y1, y2):
+        for x in range(x1, x2):
+            i = y * (x2 - x1) + x
+            value = int(data[i] % _value_count)
+            if skip_index is None or value != skip_index:
+                bitmap[x, y] = value
