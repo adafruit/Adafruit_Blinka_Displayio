@@ -1,5 +1,6 @@
 import math
-from typing import Optional, Tuple
+import struct
+from typing import Optional, Tuple, BinaryIO
 
 from displayio import Bitmap
 import circuitpython_typing
@@ -224,7 +225,6 @@ def arrayblit(
         x1: int = 0, y1: int = 0,
         x2: int | None = None, y2: int | None = None,
         skip_index: int | None = None):
-
     if x2 is None:
         x2 = bitmap.width
     if y2 is None:
@@ -237,3 +237,74 @@ def arrayblit(
             value = int(data[i] % _value_count)
             if skip_index is None or value != skip_index:
                 bitmap[x, y] = value
+
+
+def readinto(bitmap: Bitmap,
+             file: BinaryIO,
+             bits_per_pixel: int,
+             element_size: int = 1,
+             reverse_pixels_in_element: bool = False,
+             swap_bytes: bool = False,
+             reverse_rows: bool = False):
+
+    width = bitmap.width
+    height = bitmap.height
+    bits_per_value = bitmap._bits_per_value
+    mask = (1 << bits_per_value) - 1
+
+    elements_per_row = (width * bits_per_pixel + element_size * 8 - 1) // (element_size * 8)
+    rowsize = element_size * elements_per_row
+
+    for y in range(height):
+        row_bytes = file.read(rowsize)
+        if len(row_bytes) != rowsize:
+            raise EOFError()
+
+        # Convert the raw bytes into the appropriate type array for processing
+        rowdata = bytearray(row_bytes)
+
+        if swap_bytes:
+            if element_size == 2:
+                rowdata = bytearray(
+                    b''.join(
+                        struct.pack('<H', struct.unpack('>H', rowdata[i:i + 2])[0])
+                        for i in range(0, len(rowdata), 2)
+                    )
+                )
+            elif element_size == 4:
+                rowdata = bytearray(
+                    b''.join(
+                        struct.pack('<I', struct.unpack('>I', rowdata[i:i + 4])[0])
+                        for i in range(0, len(rowdata), 4)
+                    )
+                )
+
+        y_draw = height - 1 - y if reverse_rows else y
+
+        for x in range(width):
+            value = 0
+            if bits_per_pixel == 1:
+                byte_offset = x // 8
+                bit_offset = 7 - (x % 8) if reverse_pixels_in_element else x % 8
+                value = (rowdata[byte_offset] >> bit_offset) & 0x1
+            elif bits_per_pixel == 2:
+                byte_offset = x // 4
+                bit_index = 3 - (x % 4) if reverse_pixels_in_element else x % 4
+                bit_offset = 2 * bit_index
+                value = (rowdata[byte_offset] >> bit_offset) & 0x3
+            elif bits_per_pixel == 4:
+                byte_offset = x // 2
+                bit_index = 1 - (x % 2) if reverse_pixels_in_element else x % 2
+                bit_offset = 4 * bit_index
+                value = (rowdata[byte_offset] >> bit_offset) & 0xF
+            elif bits_per_pixel == 8:
+                value = rowdata[x]
+            elif bits_per_pixel == 16:
+                value = struct.unpack_from('<H', rowdata, x * 2)[0]
+            elif bits_per_pixel == 24:
+                offset = x * 3
+                value = (rowdata[offset] << 16) | (rowdata[offset + 1] << 8) | rowdata[offset + 2]
+            elif bits_per_pixel == 32:
+                value = struct.unpack_from('<I', rowdata, x * 4)[0]
+
+            bitmap[x, y_draw] = value & mask
