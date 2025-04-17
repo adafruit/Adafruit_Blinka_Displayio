@@ -87,10 +87,10 @@ class Area:
     def union(self, other, union):
         """Combine this area along with another into union"""
         if self.empty():
-            self.copy_into(union)
+            other.copy_into(union)
             return
         if other.empty():
-            other.copy_into(union)
+            self.copy_into(union)
             return
 
         union.x1 = min(self.x1, other.x1)
