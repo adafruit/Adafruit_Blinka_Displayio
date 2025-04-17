@@ -58,6 +58,8 @@ Contributions are welcome! Please read our `Code of Conduct
 <https://github.com/adafruit/Adafruit_blinka_CircuitPython_displayio/blob/master/CODE_OF_CONDUCT.md>`_
 before contributing to help this project stay welcoming.
 
+To make sure your pull request will pass the commit checks, use pre-commit to check your code formatting. Please see the guide page here for more details: https://learn.adafruit.com/contribute-to-circuitpython-with-git-and-github/check-your-code
+
 Documentation
 =============
 
