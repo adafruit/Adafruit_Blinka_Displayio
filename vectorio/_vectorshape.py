@@ -122,14 +122,12 @@ class _VectorShape:
         self._get_screen_area(current_area)
         moved = current_area != self._current_area
         if moved:
-            # This will add _current_area (the old position) to dirty area 
+            # This will add _current_area (the old position) to dirty area
             self._current_area.union(
                 self._ephemeral_dirty_area, self._ephemeral_dirty_area
             )
             # This will add the new position to the dirty area
-            current_area.union(
-                self._ephemeral_dirty_area, self._ephemeral_dirty_area
-            )
+            current_area.union(self._ephemeral_dirty_area, self._ephemeral_dirty_area)
             # Dirty area tracks the shape's footprint between draws.  It's reset on refresh finish.
             current_area.copy_into(self._current_area)
         self._current_area_dirty = True

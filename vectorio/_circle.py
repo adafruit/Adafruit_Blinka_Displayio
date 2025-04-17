@@ -61,7 +61,7 @@ class Circle(_VectorShape):
     def radius(self, value: int) -> None:
         if value < 1:
             raise ValueError("radius must be >= 1")
-        self._radius = int(value) # other code assumes radius is an integer
+        self._radius = int(value)  # other code assumes radius is an integer
         self._shape_set_dirty()
 
     @property
