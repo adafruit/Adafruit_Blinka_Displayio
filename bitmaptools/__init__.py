@@ -2,7 +2,7 @@ import math
 import struct
 from typing import Optional, Tuple, BinaryIO
 
-from displayio import Bitmap
+from displayio import Bitmap, Colorspace
 import circuitpython_typing
 
 
@@ -308,3 +308,114 @@ def readinto(bitmap: Bitmap,
                 value = struct.unpack_from('<I', rowdata, x * 4)[0]
 
             bitmap[x, y_draw] = value & mask
+
+def alphablend(dest:Bitmap, source1:Bitmap, source2:Bitmap, colorspace:Colorspace, factor1:float, factor2:float,
+               blendmode, skip_source1_index:int=None,
+               skip_source2_index:int=None):
+
+    """
+    colorspace should be one of: 'L8', 'RGB565', 'RGB565_SWAPPED', 'BGR565_SWAPPED'.
+
+blendmode can be 'normal' (or any default) or 'screen'.
+
+This assumes that all bitmaps (dest, source1, source2) support 2D access like bitmap[x, y].
+
+dest.width and dest.height are used; make sure the bitmap objects have these attributes or replace them with your own logic.
+    """
+    def clamp(val, minval, maxval):
+        return max(minval, min(maxval, val))
+
+    ifactor1 = int(factor1 * 256)
+    ifactor2 = int(factor2 * 256)
+
+    width, height = dest.width, dest.height
+
+    if colorspace == 'L8':
+        for y in range(height):
+            for x in range(width):
+                sp1 = source1[x, y]
+                sp2 = source2[x, y]
+                blend_source1 = skip_source1_index is None or sp1 != skip_source1_index
+                blend_source2 = skip_source2_index is None or sp2 != skip_source2_index
+
+                if blend_source1 and blend_source2:
+                    sda = sp1 * ifactor1
+                    sca = sp2 * ifactor2
+
+                    if blendmode == 'screen':
+                        blend = sca + sda - (sca * sda // 65536)
+                    else:
+                        blend = sca + sda * (256 - ifactor2) // 256
+
+                    denom = ifactor1 + ifactor2 - ifactor1 * ifactor2 // 256
+                    pixel = blend // denom
+                elif blend_source1:
+                    pixel = sp1 * ifactor1 // 256
+                elif blend_source2:
+                    pixel = sp2 * ifactor2 // 256
+                else:
+                    pixel = dest[x, y]
+
+                dest[x, y] = clamp(pixel, 0, 255)
+
+    else:
+        swap = colorspace in ('RGB565_SWAPPED', 'BGR565_SWAPPED')
+        r_mask = 0xf800
+        g_mask = 0x07e0
+        b_mask = 0x001f
+
+        for y in range(height):
+            for x in range(width):
+                sp1 = source1[x, y]
+                sp2 = source2[x, y]
+
+                if swap:
+                    sp1 = ((sp1 & 0xFF) << 8) | ((sp1 >> 8) & 0xFF)
+                    sp2 = ((sp2 & 0xFF) << 8) | ((sp2 >> 8) & 0xFF)
+
+                blend_source1 = skip_source1_index_none or sp1 != skip_source1_index
+                blend_source2 = skip_source2_index_none or sp2 != skip_source2_index
+
+                if blend_source1 and blend_source2:
+                    ifactor_blend = ifactor1 + ifactor2 - ifactor1 * ifactor2 // 256
+
+                    red_dca = ((sp1 & r_mask) >> 8) * ifactor1
+                    grn_dca = ((sp1 & g_mask) >> 3) * ifactor1
+                    blu_dca = ((sp1 & b_mask) << 3) * ifactor1
+
+                    red_sca = ((sp2 & r_mask) >> 8) * ifactor2
+                    grn_sca = ((sp2 & g_mask) >> 3) * ifactor2
+                    blu_sca = ((sp2 & b_mask) << 3) * ifactor2
+
+                    if blendmode == 'screen':
+                        red_blend = red_sca + red_dca - (red_sca * red_dca // 65536)
+                        grn_blend = grn_sca + grn_dca - (grn_sca * grn_dca // 65536)
+                        blu_blend = blu_sca + blu_dca - (blu_sca * blu_dca // 65536)
+                    else:
+                        red_blend = red_sca + red_dca * (256 - ifactor2) // 256
+                        grn_blend = grn_sca + grn_dca * (256 - ifactor2) // 256
+                        blu_blend = blu_sca + blu_dca * (256 - ifactor2) // 256
+
+                    r = ((red_blend // ifactor_blend) << 8) & r_mask
+                    g = ((grn_blend // ifactor_blend) << 3) & g_mask
+                    b = ((blu_blend // ifactor_blend) >> 3) & b_mask
+
+                    pixel = (r & r_mask) | (g & g_mask) | (b & b_mask)
+
+                    if swap:
+                        pixel = ((pixel & 0xFF) << 8) | ((pixel >> 8) & 0xFF)
+
+                elif blend_source1:
+                    r = ((sp1 & r_mask) * ifactor1 // 256) & r_mask
+                    g = ((sp1 & g_mask) * ifactor1 // 256) & g_mask
+                    b = ((sp1 & b_mask) * ifactor1 // 256) & b_mask
+                    pixel = r | g | b
+                elif blend_source2:
+                    r = ((sp2 & r_mask) * ifactor2 // 256) & r_mask
+                    g = ((sp2 & g_mask) * ifactor2 // 256) & g_mask
+                    b = ((sp2 & b_mask) * ifactor2 // 256) & b_mask
+                    pixel = r | g | b
+                else:
+                    pixel = dest[x, y]
+
+                dest[x, y] = pixel
