@@ -17,6 +17,7 @@ displayio for Blinka
 
 """
 import threading
+import time
 from typing import Union
 
 import fourwire
@@ -52,6 +53,7 @@ def _background():
     while True:
         for display in displays:
             display._background()  # pylint: disable=protected-access
+        time.sleep(0.001)
 
 
 def release_displays() -> None:
