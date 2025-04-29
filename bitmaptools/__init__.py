@@ -1,11 +1,11 @@
 import math
 import struct
 from typing import Optional, Tuple, BinaryIO
-import numpy as np
-from displayio import Bitmap, Colorspace
 import circuitpython_typing
+from displayio import Bitmap, Colorspace
 
 
+# pylint: disable=invalid-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements
 def fill_region(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: int):
     for y in range(y1, y2):
         for x in range(x1, x2):
@@ -144,7 +144,7 @@ def blit(
                         dest_bitmap[y_placement * dest_bitmap.width + x_placement]
                         != skip_dest_index
                     ):
-                        dest_bitmap[  # Direct index into a bitmap array is speedier than [x,y] tuple
+                        dest_bitmap[
                             y_placement * dest_bitmap.width + x_placement
                         ] = this_pixel_color
             elif y_placement > dest_bitmap.height:
@@ -169,7 +169,7 @@ def rotozoom(
 ):
     if ox is None:
         ox = dest_bitmap.width // 2
-    if oy in None:
+    if oy is None:
         oy = dest_bitmap.height // 2
 
     if dest_clip0 is None:
@@ -179,7 +179,7 @@ def rotozoom(
 
     if px is None:
         px = source_bitmap.width // 2
-    if py in None:
+    if py is None:
         py = source_bitmap.height // 2
 
     if source_clip0 is None:
@@ -282,7 +282,7 @@ def arrayblit(
     if y2 is None:
         y2 = bitmap.height
 
-    _value_count = 2**bitmap._bits_per_value
+    _value_count = 2**bitmap._bits_per_value  # pylint: disable=protected-access
     for y in range(y1, y2):
         for x in range(x1, x2):
             i = y * (x2 - x1) + x
@@ -386,13 +386,9 @@ def alphablend(
     skip_source2_index: Optional[int] = None,
 ):
     """
-        colorspace should be one of: 'L8', 'RGB565', 'RGB565_SWAPPED', 'BGR565_SWAPPED'.
+    colorspace should be one of: 'L8', 'RGB565', 'RGB565_SWAPPED', 'BGR565_SWAPPED'.
 
-    blendmode can be 'normal' (or any default) or 'screen'.
-
-    This assumes that all bitmaps (dest, source1, source2) support 2D access like bitmap[x, y].
-
-    dest.width and dest.height are used; make sure the bitmap objects have these attributes or replace them with your own logic.
+    blendmode must be one of the BlendMode constants
     """
 
     def clamp(val, minval, maxval):
@@ -685,7 +681,7 @@ def boundary_fill(
     maxx = x
     maxy = y
 
-    while len(fill_points):
+    while len(fill_points) > 0:
         cur_point = fill_points.pop(0)
         seen_points.append(cur_point)
         cur_x = cur_point[0]
