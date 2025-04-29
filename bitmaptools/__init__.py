@@ -1,7 +1,7 @@
 import math
 import struct
 from typing import Optional, Tuple, BinaryIO
-
+import numpy as np
 from displayio import Bitmap, Colorspace
 import circuitpython_typing
 
@@ -62,7 +62,7 @@ def draw_circle(dest_bitmap: Bitmap, x: int, y: int, radius: int, value: int):
 def draw_polygon(dest_bitmap: Bitmap,
                  xs: circuitpython_typing.ReadableBuffer,
                  ys: circuitpython_typing.ReadableBuffer,
-                 value: int, close: bool | None = True):
+                 value: int, close: bool = True):
     if len(xs) != len(ys):
         raise ValueError("Length of xs and ys must be equal.")
 
@@ -130,21 +130,47 @@ def blit(dest_bitmap: Bitmap, source_bitmap: Bitmap,
 
 
 def rotozoom(
-        dest_bitmap,
-        source_bitmap,
+        dest_bitmap: Bitmap,
+        source_bitmap: Bitmap,
         *,
-        ox: int,
-        oy: int,
-        dest_clip0: Tuple[int, int],
-        dest_clip1: Tuple[int, int],
-        px: int,
-        py: int,
-        source_clip0: Tuple[int, int],
-        source_clip1: Tuple[int, int],
-        angle: float,
-        scale: float,
-        skip_index: int,
+        ox: Optional[int] = None,
+        oy: Optional[int] = None,
+        dest_clip0: Optional[Tuple[int, int]] = None,
+        dest_clip1: Optional[Tuple[int, int]] = None,
+        px: Optional[int] = None,
+        py: Optional[int] = None,
+        source_clip0: Optional[Tuple[int, int]] = None,
+        source_clip1: Optional[Tuple[int, int]] = None,
+        angle: Optional[float] = None,
+        scale: Optional[float] = None,
+        skip_index: Optional[int] = None,
 ):
+
+    if ox is None:
+        ox = dest_bitmap.width // 2
+    if oy in None:
+        oy = dest_bitmap.height // 2
+
+    if dest_clip0 is None:
+        dest_clip0 = (0,0)
+    if dest_clip1 is None:
+        dest_clip1 = (dest_bitmap.width,dest_bitmap.height)
+
+    if px is None:
+        px = source_bitmap.width // 2
+    if py in None:
+        py = source_bitmap.height // 2
+
+    if source_clip0 is None:
+        source_clip0 = (0,0)
+    if source_clip1 is None:
+        source_clip1 = (source_bitmap.width,source_bitmap.height)
+
+    if angle is None:
+        angle = 0.0
+    if scale is None:
+        scale = 1.0
+
     dest_clip0_x, dest_clip0_y = dest_clip0
     dest_clip1_x, dest_clip1_y = dest_clip1
     source_clip0_x, source_clip0_y = source_clip0
@@ -223,8 +249,8 @@ def arrayblit(
         bitmap: Bitmap,
         data: circuitpython_typing.ReadableBuffer,
         x1: int = 0, y1: int = 0,
-        x2: int | None = None, y2: int | None = None,
-        skip_index: int | None = None):
+        x2: Optional[int] = None, y2: Optional[int] = None,
+        skip_index: Optional[int] = None):
     if x2 is None:
         x2 = bitmap.width
     if y2 is None:
@@ -246,7 +272,6 @@ def readinto(bitmap: Bitmap,
              reverse_pixels_in_element: bool = False,
              swap_bytes: bool = False,
              reverse_rows: bool = False):
-
     width = bitmap.width
     height = bitmap.height
     bits_per_value = bitmap._bits_per_value
@@ -309,10 +334,14 @@ def readinto(bitmap: Bitmap,
 
             bitmap[x, y_draw] = value & mask
 
-def alphablend(dest:Bitmap, source1:Bitmap, source2:Bitmap, colorspace:Colorspace, factor1:float, factor2:float,
-               blendmode, skip_source1_index:int=None,
-               skip_source2_index:int=None):
+class BlendMode:
+    Normal = "bitmaptools.BlendMode.Normal"
+    Screen = "bitmaptools.BlendMode.Screen"
 
+def alphablend(dest: Bitmap, source1: Bitmap, source2: Bitmap, colorspace: Colorspace,
+               factor1: float = 0.5, factor2: Optional[float] = None,
+               blendmode: BlendMode = BlendMode.Normal, skip_source1_index: Optional[int] = None,
+               skip_source2_index: Optional[int] = None):
     """
     colorspace should be one of: 'L8', 'RGB565', 'RGB565_SWAPPED', 'BGR565_SWAPPED'.
 
@@ -342,9 +371,9 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
                     sda = sp1 * ifactor1
                     sca = sp2 * ifactor2
 
-                    if blendmode == 'screen':
+                    if blendmode == BlendMode.Screen:
                         blend = sca + sda - (sca * sda // 65536)
-                    else:
+                    elif blendmode == BlendMode.Normal:
                         blend = sca + sda * (256 - ifactor2) // 256
 
                     denom = ifactor1 + ifactor2 - ifactor1 * ifactor2 // 256
@@ -373,8 +402,8 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
                     sp1 = ((sp1 & 0xFF) << 8) | ((sp1 >> 8) & 0xFF)
                     sp2 = ((sp2 & 0xFF) << 8) | ((sp2 >> 8) & 0xFF)
 
-                blend_source1 = skip_source1_index_none or sp1 != skip_source1_index
-                blend_source2 = skip_source2_index_none or sp2 != skip_source2_index
+                blend_source1 = skip_source1_index is None or sp1 != skip_source1_index
+                blend_source2 = skip_source2_index is None or sp2 != skip_source2_index
 
                 if blend_source1 and blend_source2:
                     ifactor_blend = ifactor1 + ifactor2 - ifactor1 * ifactor2 // 256
@@ -387,11 +416,11 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
                     grn_sca = ((sp2 & g_mask) >> 3) * ifactor2
                     blu_sca = ((sp2 & b_mask) << 3) * ifactor2
 
-                    if blendmode == 'screen':
+                    if blendmode == BlendMode.Screen:
                         red_blend = red_sca + red_dca - (red_sca * red_dca // 65536)
                         grn_blend = grn_sca + grn_dca - (grn_sca * grn_dca // 65536)
                         blu_blend = blu_sca + blu_dca - (blu_sca * blu_dca // 65536)
-                    else:
+                    elif blendmode == BlendMode.Normal:
                         red_blend = red_sca + red_dca * (256 - ifactor2) // 256
                         grn_blend = grn_sca + grn_dca * (256 - ifactor2) // 256
                         blu_blend = blu_sca + blu_dca * (256 - ifactor2) // 256
@@ -418,4 +447,184 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
                 else:
                     pixel = dest[x, y]
 
+                print(f"pixel hex: {hex(pixel)}")
                 dest[x, y] = pixel
+
+class DitherAlgorithm:
+    Atkinson = "bitmaptools.DitherAlgorithm.Atkinson"
+    FloydStenberg = "bitmaptools.DitherAlgorithm.FloydStenberg"
+
+    atkinson = {
+        'count': 4,
+        'mx': 2,
+        'dl': 256 // 8,
+        'terms': [
+            {'dx': 2, 'dy': 0, 'dl': 256 // 8},
+            {'dx': -1, 'dy': 1, 'dl': 256 // 8},
+            {'dx': 0, 'dy': 1, 'dl': 256 // 8},
+            {'dx': 0, 'dy': 2, 'dl': 256 // 8},
+        ]
+    }
+
+    floyd_stenberg = {
+        'count': 3,
+        'mx': 1,
+        'dl': 7 * 256 // 16,
+        'terms': [
+            {'dx': -1, 'dy': 1, 'dl': 3 * 256 // 16},
+            {'dx': 0, 'dy': 1, 'dl': 5 * 256 // 16},
+            {'dx': 1, 'dy': 1, 'dl': 1 * 256 // 16},
+        ]
+    }
+
+    algorithm_map = {
+        Atkinson: atkinson,
+        FloydStenberg: floyd_stenberg
+    }
+
+
+def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atkinson):
+    SWAP_BYTES = 1 << 0
+    SWAP_RB = 1 << 1
+    height, width = dest_bitmap.width, dest_bitmap.height
+    swap_bytes = colorspace in (Colorspace.RGB565_SWAPPED, Colorspace.BGR565_SWAPPED)
+    swap_rb = colorspace in (Colorspace.BGR565, Colorspace.BGR565_SWAPPED)
+    algorithm_info = DitherAlgorithm.algorithm_map[algorithm]
+    mx = algorithm_info['mx']
+    count = algorithm_info['count']
+    terms = algorithm_info['terms']
+    dl = algorithm_info['dl']
+
+    swap = 0
+    if swap_bytes:
+        swap |= SWAP_BYTES
+
+    if swap_rb:
+        swap |= SWAP_RB
+
+    print(f"swap: {swap}")
+
+    # Create row data arrays (3 rows with padding on both sides)
+    rowdata = [[0] * (width + 2 * mx) for _ in range(3)]
+    rows = [
+        rowdata[0][mx:],
+        rowdata[1][mx:],
+        rowdata[2][mx:]
+    ]
+
+    # Output array for one row at a time (padded to multiple of 32)
+    out = [False] * (((width + 31) // 32) * 32)
+
+    # Helper function to fill a row with luminance data
+    def fill_row(bitmap, swap, luminance_data, y, mx):
+        if y >= bitmap.height:
+            return
+
+        # Zero out padding area
+        for i in range(mx):
+            luminance_data[-mx + i] = 0
+            luminance_data[bitmap.width + i] = 0
+
+        if bitmap._bits_per_value == 8:
+            for x in range(bitmap.width):
+                luminance_data[x] = bitmap[x, y]
+        else:
+            for x in range(bitmap.width):
+                pixel = bitmap[x, y]
+                if swap & SWAP_BYTES:
+                    # Swap bytes (equivalent to __builtin_bswap16)
+                    pixel = ((pixel & 0xFF) << 8) | ((pixel >> 8) & 0xFF)
+
+                r = (pixel >> 8) & 0xF8
+                g = (pixel >> 3) & 0xFC
+                b = (pixel << 3) & 0xF8
+
+                if swap & SWAP_BYTES:
+                    r, b = b, r
+
+                # Calculate luminance using same formula as C version
+                luminance_data[x] = (r * 78 + g * 154 + b * 29) // 256
+
+    # Helper function to write pixels to destination bitmap
+    def write_pixels(bitmap, y, data):
+        if bitmap._bits_per_value == 1:
+            for i in range(0, bitmap.width, 32):
+                # Pack 32 bits into an integer
+                p = 0
+                for j in range(min(32, bitmap.width - i)):
+                    p = (p << 1)
+                    if data[i + j]:
+                        p |= 1
+
+                # Write packed value
+                for j in range(min(32, bitmap.width - i)):
+                    bitmap[i + j, y] = (p >> (31 - j)) & 1
+        else:
+            for i in range(bitmap.width):
+                bitmap[i, y] = 65535 if data[i] else 0
+
+    # Fill initial rows
+    fill_row(source_bitmap, swap, rows[0], 0, mx)
+    fill_row(source_bitmap, swap, rows[1], 1, mx)
+    fill_row(source_bitmap, swap, rows[2], 2, mx)
+
+    err = 0
+
+    for y in range(height):
+        # Going left to right
+        for x in range(width):
+            pixel_in = rows[0][x] + err
+            pixel_out = pixel_in >= 128
+            out[x] = pixel_out
+
+            err = pixel_in - (255 if pixel_out else 0)
+
+            # Distribute error to neighboring pixels
+            for i in range(count):
+                x1 = x + terms[i]['dx']
+                dy = terms[i]['dy']
+
+                rows[dy][x1] = ((terms[i]['dl'] * err) // 256) + rows[dy][x1]
+
+            err = (err * dl) // 256
+
+        write_pixels(dest_bitmap, y, out)
+
+        # Cycle the rows
+        rows[0], rows[1], rows[2] = rows[1], rows[2], rows[0]
+
+        y += 1
+        if y == height:
+            break
+
+        # Fill the next row for future processing
+        fill_row(source_bitmap, swap, rows[2], y + 2, mx)
+
+        # Going right to left
+        for x in range(width - 1, -1, -1):
+            pixel_in = rows[0][x] + err
+            pixel_out = pixel_in >= 128
+            out[x] = pixel_out
+
+            err = pixel_in - (255 if pixel_out else 0)
+
+            # Distribute error to neighboring pixels (in reverse direction)
+            for i in range(count):
+                x1 = x - terms[i]['dx']
+                dy = terms[i]['dy']
+
+                rows[dy][x1] = ((terms[i]['dl'] * err) // 256) + rows[dy][x1]
+
+            err = (err * dl) // 256
+
+        write_pixels(dest_bitmap, y, out)
+
+        # Cycle the rows again
+        rows[0], rows[1], rows[2] = rows[1], rows[2], rows[0]
+
+        # Fill the next row for future processing
+        fill_row(source_bitmap, swap, rows[2], y + 3, mx)
+
+    # Mark the entire bitmap as dirty (this would be implementation-specific)
+    # In CircuitPython, this might be something like:
+    dest_bitmap.dirty()
