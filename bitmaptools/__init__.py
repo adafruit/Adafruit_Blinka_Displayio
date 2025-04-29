@@ -461,7 +461,7 @@ def readinto(
     """
     width = bitmap.width
     height = bitmap.height
-    bits_per_value = bitmap._bits_per_value
+    bits_per_value = bitmap._bits_per_value  # pylint: disable=protected-access
     mask = (1 << bits_per_value) - 1
 
     elements_per_row = (width * bits_per_pixel + element_size * 8 - 1) // (
@@ -532,6 +532,7 @@ class BlendMode:
     """
     Options for modes to use by alphablend() function.
     """
+    # pylint: disable=too-few-public-methods
 
     Normal = "bitmaptools.BlendMode.Normal"
     Screen = "bitmaptools.BlendMode.Screen"
@@ -675,6 +676,7 @@ class DitherAlgorithm:
     """
     Options for algorithm to use by dither() function.
     """
+    # pylint: disable=too-few-public-methods
 
     Atkinson = "bitmaptools.DitherAlgorithm.Atkinson"
     FloydStenberg = "bitmaptools.DitherAlgorithm.FloydStenberg"
@@ -753,7 +755,7 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
             luminance_data[-mx + i] = 0
             luminance_data[bitmap.width + i] = 0
 
-        if bitmap._bits_per_value == 8:
+        if bitmap._bits_per_value == 8:  # pylint: disable=protected-access
             for x in range(bitmap.width):
                 luminance_data[x] = bitmap[x, y]
         else:
@@ -775,7 +777,7 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
 
     # Helper function to write pixels to destination bitmap
     def write_pixels(bitmap, y, data):
-        if bitmap._bits_per_value == 1:
+        if bitmap._bits_per_value == 1:  # pylint: disable=protected-access
             for i in range(0, bitmap.width, 32):
                 # Pack 32 bits into an integer
                 p = 0
