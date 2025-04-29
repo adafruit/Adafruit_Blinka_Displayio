@@ -532,6 +532,7 @@ class BlendMode:
     """
     Options for modes to use by alphablend() function.
     """
+
     # pylint: disable=too-few-public-methods
 
     Normal = "bitmaptools.BlendMode.Normal"
@@ -676,6 +677,7 @@ class DitherAlgorithm:
     """
     Options for algorithm to use by dither() function.
     """
+
     # pylint: disable=too-few-public-methods
 
     Atkinson = "bitmaptools.DitherAlgorithm.Atkinson"
