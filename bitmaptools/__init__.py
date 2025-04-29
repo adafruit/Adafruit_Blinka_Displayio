@@ -59,10 +59,13 @@ def draw_circle(dest_bitmap: Bitmap, x: int, y: int, radius: int, value: int):
         xb += 1
 
 
-def draw_polygon(dest_bitmap: Bitmap,
-                 xs: circuitpython_typing.ReadableBuffer,
-                 ys: circuitpython_typing.ReadableBuffer,
-                 value: int, close: bool = True):
+def draw_polygon(
+    dest_bitmap: Bitmap,
+    xs: circuitpython_typing.ReadableBuffer,
+    ys: circuitpython_typing.ReadableBuffer,
+    value: int,
+    close: bool = True,
+):
     if len(xs) != len(ys):
         raise ValueError("Length of xs and ys must be equal.")
 
@@ -70,25 +73,40 @@ def draw_polygon(dest_bitmap: Bitmap,
         cur_point = (xs[i], ys[i])
         next_point = (xs[i + 1], ys[i + 1])
         print(f"cur: {cur_point}, next: {next_point}")
-        draw_line(dest_bitmap=dest_bitmap,
-                  x1=cur_point[0], y1=cur_point[1],
-                  x2=next_point[0], y2=next_point[1],
-                  value=value)
+        draw_line(
+            dest_bitmap=dest_bitmap,
+            x1=cur_point[0],
+            y1=cur_point[1],
+            x2=next_point[0],
+            y2=next_point[1],
+            value=value,
+        )
 
     if close:
         print(f"close: {(xs[0], ys[0])} - {(xs[-1], ys[-1])}")
-        draw_line(dest_bitmap=dest_bitmap,
-                  x1=xs[0], y1=ys[0],
-                  x2=xs[-1], y2=ys[-1],
-                  value=value)
+        draw_line(
+            dest_bitmap=dest_bitmap,
+            x1=xs[0],
+            y1=ys[0],
+            x2=xs[-1],
+            y2=ys[-1],
+            value=value,
+        )
 
 
-def blit(dest_bitmap: Bitmap, source_bitmap: Bitmap,
-         x: int, y: int, *,
-         x1: int = 0, y1: int = 0,
-         x2: int | None = None, y2: int | None = None,
-         skip_source_index: int | None = None,
-         skip_dest_index: int | None = None):
+def blit(
+    dest_bitmap: Bitmap,
+    source_bitmap: Bitmap,
+    x: int,
+    y: int,
+    *,
+    x1: int = 0,
+    y1: int = 0,
+    x2: int | None = None,
+    y2: int | None = None,
+    skip_source_index: int | None = None,
+    skip_dest_index: int | None = None,
+):
     """Inserts the source_bitmap region defined by rectangular boundaries"""
     # pylint: disable=invalid-name
     if x2 is None:
@@ -112,49 +130,52 @@ def blit(dest_bitmap: Bitmap, source_bitmap: Bitmap,
             y_placement = y + y_count
 
             if (dest_bitmap.width > x_placement >= 0) and (
-                    dest_bitmap.height > y_placement >= 0
+                dest_bitmap.height > y_placement >= 0
             ):  # ensure placement is within target bitmap
                 # get the palette index from the source bitmap
                 this_pixel_color = source_bitmap[
                     y1 + (y_count * source_bitmap.width) + x1 + x_count
-                    ]
+                ]
 
-                if (skip_source_index is None) or (this_pixel_color != skip_source_index):
+                if (skip_source_index is None) or (
+                    this_pixel_color != skip_source_index
+                ):
                     if (skip_dest_index is None) or (
-                            dest_bitmap[y_placement * dest_bitmap.width + x_placement] != skip_dest_index):
+                        dest_bitmap[y_placement * dest_bitmap.width + x_placement]
+                        != skip_dest_index
+                    ):
                         dest_bitmap[  # Direct index into a bitmap array is speedier than [x,y] tuple
                             y_placement * dest_bitmap.width + x_placement
-                            ] = this_pixel_color
+                        ] = this_pixel_color
             elif y_placement > dest_bitmap.height:
                 break
 
 
 def rotozoom(
-        dest_bitmap: Bitmap,
-        source_bitmap: Bitmap,
-        *,
-        ox: Optional[int] = None,
-        oy: Optional[int] = None,
-        dest_clip0: Optional[Tuple[int, int]] = None,
-        dest_clip1: Optional[Tuple[int, int]] = None,
-        px: Optional[int] = None,
-        py: Optional[int] = None,
-        source_clip0: Optional[Tuple[int, int]] = None,
-        source_clip1: Optional[Tuple[int, int]] = None,
-        angle: Optional[float] = None,
-        scale: Optional[float] = None,
-        skip_index: Optional[int] = None,
+    dest_bitmap: Bitmap,
+    source_bitmap: Bitmap,
+    *,
+    ox: Optional[int] = None,
+    oy: Optional[int] = None,
+    dest_clip0: Optional[Tuple[int, int]] = None,
+    dest_clip1: Optional[Tuple[int, int]] = None,
+    px: Optional[int] = None,
+    py: Optional[int] = None,
+    source_clip0: Optional[Tuple[int, int]] = None,
+    source_clip1: Optional[Tuple[int, int]] = None,
+    angle: Optional[float] = None,
+    scale: Optional[float] = None,
+    skip_index: Optional[int] = None,
 ):
-
     if ox is None:
         ox = dest_bitmap.width // 2
     if oy in None:
         oy = dest_bitmap.height // 2
 
     if dest_clip0 is None:
-        dest_clip0 = (0,0)
+        dest_clip0 = (0, 0)
     if dest_clip1 is None:
-        dest_clip1 = (dest_bitmap.width,dest_bitmap.height)
+        dest_clip1 = (dest_bitmap.width, dest_bitmap.height)
 
     if px is None:
         px = source_bitmap.width // 2
@@ -162,9 +183,9 @@ def rotozoom(
         py = source_bitmap.height // 2
 
     if source_clip0 is None:
-        source_clip0 = (0,0)
+        source_clip0 = (0, 0)
     if source_clip1 is None:
-        source_clip1 = (source_bitmap.width,source_bitmap.height)
+        source_clip1 = (source_bitmap.width, source_bitmap.height)
 
     if angle is None:
         angle = 0.0
@@ -235,7 +256,9 @@ def rotozoom(
         u = rowu + minx * du_row
         v = rowv + minx * dv_row
         for x in range(minx, maxx + 1):
-            if (source_clip0_x <= u < source_clip1_x) and (source_clip0_y <= v < source_clip1_y):
+            if (source_clip0_x <= u < source_clip1_x) and (
+                source_clip0_y <= v < source_clip1_y
+            ):
                 c = source_bitmap[int(u), int(v)]
                 if skip_index is None or c != skip_index:
                     dest_bitmap[x, y] = c
@@ -246,17 +269,20 @@ def rotozoom(
 
 
 def arrayblit(
-        bitmap: Bitmap,
-        data: circuitpython_typing.ReadableBuffer,
-        x1: int = 0, y1: int = 0,
-        x2: Optional[int] = None, y2: Optional[int] = None,
-        skip_index: Optional[int] = None):
+    bitmap: Bitmap,
+    data: circuitpython_typing.ReadableBuffer,
+    x1: int = 0,
+    y1: int = 0,
+    x2: Optional[int] = None,
+    y2: Optional[int] = None,
+    skip_index: Optional[int] = None,
+):
     if x2 is None:
         x2 = bitmap.width
     if y2 is None:
         y2 = bitmap.height
 
-    _value_count = 2 ** bitmap._bits_per_value
+    _value_count = 2**bitmap._bits_per_value
     for y in range(y1, y2):
         for x in range(x1, x2):
             i = y * (x2 - x1) + x
@@ -265,19 +291,23 @@ def arrayblit(
                 bitmap[x, y] = value
 
 
-def readinto(bitmap: Bitmap,
-             file: BinaryIO,
-             bits_per_pixel: int,
-             element_size: int = 1,
-             reverse_pixels_in_element: bool = False,
-             swap_bytes: bool = False,
-             reverse_rows: bool = False):
+def readinto(
+    bitmap: Bitmap,
+    file: BinaryIO,
+    bits_per_pixel: int,
+    element_size: int = 1,
+    reverse_pixels_in_element: bool = False,
+    swap_bytes: bool = False,
+    reverse_rows: bool = False,
+):
     width = bitmap.width
     height = bitmap.height
     bits_per_value = bitmap._bits_per_value
     mask = (1 << bits_per_value) - 1
 
-    elements_per_row = (width * bits_per_pixel + element_size * 8 - 1) // (element_size * 8)
+    elements_per_row = (width * bits_per_pixel + element_size * 8 - 1) // (
+        element_size * 8
+    )
     rowsize = element_size * elements_per_row
 
     for y in range(height):
@@ -291,15 +321,15 @@ def readinto(bitmap: Bitmap,
         if swap_bytes:
             if element_size == 2:
                 rowdata = bytearray(
-                    b''.join(
-                        struct.pack('<H', struct.unpack('>H', rowdata[i:i + 2])[0])
+                    b"".join(
+                        struct.pack("<H", struct.unpack(">H", rowdata[i : i + 2])[0])
                         for i in range(0, len(rowdata), 2)
                     )
                 )
             elif element_size == 4:
                 rowdata = bytearray(
-                    b''.join(
-                        struct.pack('<I', struct.unpack('>I', rowdata[i:i + 4])[0])
+                    b"".join(
+                        struct.pack("<I", struct.unpack(">I", rowdata[i : i + 4])[0])
                         for i in range(0, len(rowdata), 4)
                     )
                 )
@@ -325,32 +355,46 @@ def readinto(bitmap: Bitmap,
             elif bits_per_pixel == 8:
                 value = rowdata[x]
             elif bits_per_pixel == 16:
-                value = struct.unpack_from('<H', rowdata, x * 2)[0]
+                value = struct.unpack_from("<H", rowdata, x * 2)[0]
             elif bits_per_pixel == 24:
                 offset = x * 3
-                value = (rowdata[offset] << 16) | (rowdata[offset + 1] << 8) | rowdata[offset + 2]
+                value = (
+                    (rowdata[offset] << 16)
+                    | (rowdata[offset + 1] << 8)
+                    | rowdata[offset + 2]
+                )
             elif bits_per_pixel == 32:
-                value = struct.unpack_from('<I', rowdata, x * 4)[0]
+                value = struct.unpack_from("<I", rowdata, x * 4)[0]
 
             bitmap[x, y_draw] = value & mask
+
 
 class BlendMode:
     Normal = "bitmaptools.BlendMode.Normal"
     Screen = "bitmaptools.BlendMode.Screen"
 
-def alphablend(dest: Bitmap, source1: Bitmap, source2: Bitmap, colorspace: Colorspace,
-               factor1: float = 0.5, factor2: Optional[float] = None,
-               blendmode: BlendMode = BlendMode.Normal, skip_source1_index: Optional[int] = None,
-               skip_source2_index: Optional[int] = None):
+
+def alphablend(
+    dest: Bitmap,
+    source1: Bitmap,
+    source2: Bitmap,
+    colorspace: Colorspace,
+    factor1: float = 0.5,
+    factor2: Optional[float] = None,
+    blendmode: BlendMode = BlendMode.Normal,
+    skip_source1_index: Optional[int] = None,
+    skip_source2_index: Optional[int] = None,
+):
     """
-    colorspace should be one of: 'L8', 'RGB565', 'RGB565_SWAPPED', 'BGR565_SWAPPED'.
+        colorspace should be one of: 'L8', 'RGB565', 'RGB565_SWAPPED', 'BGR565_SWAPPED'.
 
-blendmode can be 'normal' (or any default) or 'screen'.
+    blendmode can be 'normal' (or any default) or 'screen'.
 
-This assumes that all bitmaps (dest, source1, source2) support 2D access like bitmap[x, y].
+    This assumes that all bitmaps (dest, source1, source2) support 2D access like bitmap[x, y].
 
-dest.width and dest.height are used; make sure the bitmap objects have these attributes or replace them with your own logic.
+    dest.width and dest.height are used; make sure the bitmap objects have these attributes or replace them with your own logic.
     """
+
     def clamp(val, minval, maxval):
         return max(minval, min(maxval, val))
 
@@ -359,7 +403,7 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
 
     width, height = dest.width, dest.height
 
-    if colorspace == 'L8':
+    if colorspace == "L8":
         for y in range(height):
             for x in range(width):
                 sp1 = source1[x, y]
@@ -388,10 +432,10 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
                 dest[x, y] = clamp(pixel, 0, 255)
 
     else:
-        swap = colorspace in ('RGB565_SWAPPED', 'BGR565_SWAPPED')
-        r_mask = 0xf800
-        g_mask = 0x07e0
-        b_mask = 0x001f
+        swap = colorspace in ("RGB565_SWAPPED", "BGR565_SWAPPED")
+        r_mask = 0xF800
+        g_mask = 0x07E0
+        b_mask = 0x001F
 
         for y in range(height):
             for x in range(width):
@@ -450,37 +494,35 @@ dest.width and dest.height are used; make sure the bitmap objects have these att
                 print(f"pixel hex: {hex(pixel)}")
                 dest[x, y] = pixel
 
+
 class DitherAlgorithm:
     Atkinson = "bitmaptools.DitherAlgorithm.Atkinson"
     FloydStenberg = "bitmaptools.DitherAlgorithm.FloydStenberg"
 
     atkinson = {
-        'count': 4,
-        'mx': 2,
-        'dl': 256 // 8,
-        'terms': [
-            {'dx': 2, 'dy': 0, 'dl': 256 // 8},
-            {'dx': -1, 'dy': 1, 'dl': 256 // 8},
-            {'dx': 0, 'dy': 1, 'dl': 256 // 8},
-            {'dx': 0, 'dy': 2, 'dl': 256 // 8},
-        ]
+        "count": 4,
+        "mx": 2,
+        "dl": 256 // 8,
+        "terms": [
+            {"dx": 2, "dy": 0, "dl": 256 // 8},
+            {"dx": -1, "dy": 1, "dl": 256 // 8},
+            {"dx": 0, "dy": 1, "dl": 256 // 8},
+            {"dx": 0, "dy": 2, "dl": 256 // 8},
+        ],
     }
 
     floyd_stenberg = {
-        'count': 3,
-        'mx': 1,
-        'dl': 7 * 256 // 16,
-        'terms': [
-            {'dx': -1, 'dy': 1, 'dl': 3 * 256 // 16},
-            {'dx': 0, 'dy': 1, 'dl': 5 * 256 // 16},
-            {'dx': 1, 'dy': 1, 'dl': 1 * 256 // 16},
-        ]
+        "count": 3,
+        "mx": 1,
+        "dl": 7 * 256 // 16,
+        "terms": [
+            {"dx": -1, "dy": 1, "dl": 3 * 256 // 16},
+            {"dx": 0, "dy": 1, "dl": 5 * 256 // 16},
+            {"dx": 1, "dy": 1, "dl": 1 * 256 // 16},
+        ],
     }
 
-    algorithm_map = {
-        Atkinson: atkinson,
-        FloydStenberg: floyd_stenberg
-    }
+    algorithm_map = {Atkinson: atkinson, FloydStenberg: floyd_stenberg}
 
 
 def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atkinson):
@@ -490,10 +532,10 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
     swap_bytes = colorspace in (Colorspace.RGB565_SWAPPED, Colorspace.BGR565_SWAPPED)
     swap_rb = colorspace in (Colorspace.BGR565, Colorspace.BGR565_SWAPPED)
     algorithm_info = DitherAlgorithm.algorithm_map[algorithm]
-    mx = algorithm_info['mx']
-    count = algorithm_info['count']
-    terms = algorithm_info['terms']
-    dl = algorithm_info['dl']
+    mx = algorithm_info["mx"]
+    count = algorithm_info["count"]
+    terms = algorithm_info["terms"]
+    dl = algorithm_info["dl"]
 
     swap = 0
     if swap_bytes:
@@ -506,11 +548,7 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
 
     # Create row data arrays (3 rows with padding on both sides)
     rowdata = [[0] * (width + 2 * mx) for _ in range(3)]
-    rows = [
-        rowdata[0][mx:],
-        rowdata[1][mx:],
-        rowdata[2][mx:]
-    ]
+    rows = [rowdata[0][mx:], rowdata[1][mx:], rowdata[2][mx:]]
 
     # Output array for one row at a time (padded to multiple of 32)
     out = [False] * (((width + 31) // 32) * 32)
@@ -552,7 +590,7 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
                 # Pack 32 bits into an integer
                 p = 0
                 for j in range(min(32, bitmap.width - i)):
-                    p = (p << 1)
+                    p = p << 1
                     if data[i + j]:
                         p |= 1
 
@@ -581,10 +619,10 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
 
             # Distribute error to neighboring pixels
             for i in range(count):
-                x1 = x + terms[i]['dx']
-                dy = terms[i]['dy']
+                x1 = x + terms[i]["dx"]
+                dy = terms[i]["dy"]
 
-                rows[dy][x1] = ((terms[i]['dl'] * err) // 256) + rows[dy][x1]
+                rows[dy][x1] = ((terms[i]["dl"] * err) // 256) + rows[dy][x1]
 
             err = (err * dl) // 256
 
@@ -610,10 +648,10 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
 
             # Distribute error to neighboring pixels (in reverse direction)
             for i in range(count):
-                x1 = x - terms[i]['dx']
-                dy = terms[i]['dy']
+                x1 = x - terms[i]["dx"]
+                dy = terms[i]["dy"]
 
-                rows[dy][x1] = ((terms[i]['dl'] * err) // 256) + rows[dy][x1]
+                rows[dy][x1] = ((terms[i]["dl"] * err) // 256) + rows[dy][x1]
 
             err = (err * dl) // 256
 
@@ -625,6 +663,74 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
         # Fill the next row for future processing
         fill_row(source_bitmap, swap, rows[2], y + 3, mx)
 
-    # Mark the entire bitmap as dirty (this would be implementation-specific)
-    # In CircuitPython, this might be something like:
-    dest_bitmap.dirty()
+
+def boundary_fill(
+    dest_bitmap: Bitmap,
+    x: int,
+    y: int,
+    fill_color_value: int,
+    replaced_color_value: Optional[int] = None,
+):
+    if fill_color_value == replaced_color_value:
+        return
+    if replaced_color_value == -1:
+        replaced_color_value = dest_bitmap[x, y]
+
+    fill_points = []
+    fill_points.append((x, y))
+
+    seen_points = []
+    minx = x
+    miny = y
+    maxx = x
+    maxy = y
+
+    while len(fill_points):
+        cur_point = fill_points.pop(0)
+        seen_points.append(cur_point)
+        cur_x = cur_point[0]
+        cur_y = cur_point[1]
+
+        cur_point_color = dest_bitmap[cur_x, cur_y]
+        if replaced_color_value is not None and cur_point_color != replaced_color_value:
+            continue
+        if cur_x < minx:
+            minx = cur_x
+        if cur_y < miny:
+            miny = cur_y
+        if cur_x > maxx:
+            maxx = cur_x
+        if cur_y > maxy:
+            maxy = cur_y
+
+        dest_bitmap[cur_x, cur_y] = fill_color_value
+
+        above_point = (cur_x, cur_y - 1)
+        below_point = (cur_x, cur_y + 1)
+        left_point = (cur_x - 1, cur_y)
+        right_point = (cur_x + 1, cur_y)
+
+        if (
+            above_point[1] >= 0
+            and above_point not in seen_points
+            and above_point not in fill_points
+        ):
+            fill_points.append(above_point)
+        if (
+            below_point[1] < dest_bitmap.height
+            and below_point not in seen_points
+            and below_point not in fill_points
+        ):
+            fill_points.append(below_point)
+        if (
+            left_point[0] >= 0
+            and left_point not in seen_points
+            and left_point not in fill_points
+        ):
+            fill_points.append(left_point)
+        if (
+            right_point[0] < dest_bitmap.width
+            and right_point not in seen_points
+            and right_point not in fill_points
+        ):
+            fill_points.append(right_point)
