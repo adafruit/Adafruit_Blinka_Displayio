@@ -42,7 +42,8 @@ dynamic = ["dependencies"]
 
 [tool.setuptools]
 py-modules = ["fontio", "terminalio"]
-packages = ["displayio", "vectorio", "paralleldisplaybus", "i2cdisplaybus", "fourwire", "busdisplay", "epaperdisplay"]
+packages = ["displayio", "vectorio", "paralleldisplaybus", "i2cdisplaybus", "fourwire", "busdisplay", "epaperdisplay",
+    "bitmaptools"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
