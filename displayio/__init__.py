@@ -19,11 +19,6 @@ displayio for Blinka
 import threading
 from typing import Union
 
-import fourwire
-import i2cdisplaybus
-from busdisplay import BusDisplay
-from busdisplay._displaybus import _DisplayBus
-from epaperdisplay import EPaperDisplay
 from ._bitmap import Bitmap
 from ._colorspace import Colorspace
 from ._colorconverter import ColorConverter
@@ -33,11 +28,6 @@ from ._palette import Palette
 from ._tilegrid import TileGrid
 from ._constants import CIRCUITPY_DISPLAY_LIMIT
 
-# 8.x Backwards compatibility, remove at 10.x or
-# when compatibility is removed from core displayio
-Display = BusDisplay
-FourWire = fourwire.FourWire
-I2CDisplay = i2cdisplaybus.I2CDisplayBus
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -69,14 +59,16 @@ def release_displays() -> None:
     display_buses.clear()
 
 
-def allocate_display(new_display: Union[BusDisplay, EPaperDisplay]) -> None:
+def allocate_display(
+    new_display: Union["busdisplay.BusDisplay", "epaperdisplay.EPaperDisplay"]
+) -> None:
     """Add a display to the displays pool and return the new display"""
     if len(displays) >= CIRCUITPY_DISPLAY_LIMIT:
         raise RuntimeError("Too many displays")
     displays.append(new_display)
 
 
-def allocate_display_bus(new_display_bus: _DisplayBus) -> None:
+def allocate_display_bus(new_display_bus: "busdisplay._displaybus._DisplayBus") -> None:
     """Add a display bus to the display_buses pool and return the new display bus"""
     if len(display_buses) >= CIRCUITPY_DISPLAY_LIMIT:
         raise RuntimeError(
