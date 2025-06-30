@@ -147,10 +147,10 @@ def blit(
     *,
     x1: int = 0,
     y1: int = 0,
-    x2: int | None = None,
-    y2: int | None = None,
-    skip_source_index: int | None = None,
-    skip_dest_index: int | None = None,
+    x2: Optional[int] = None,
+    y2: Optional[int] = None,
+    skip_source_index: Optional[int] = None,
+    skip_dest_index: Optional[int] = None,
 ):
     """Inserts the source_bitmap region defined by rectangular boundaries
     (x1,y1) and (x2,y2) into the bitmap at the specified (x,y) location.
