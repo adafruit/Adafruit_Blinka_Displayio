@@ -144,7 +144,7 @@ class Bitmap:
             ) & self._bitmask
         row = memoryview(self._data)[row_start : row_start + self._stride]
         if bytes_per_value == 1:
-            return row[x]
+            return struct.unpack_from("<B", row, x)[0]
         if bytes_per_value == 2:
             return struct.unpack_from("<H", row, x * 2)[0]
         if bytes_per_value == 4:
@@ -193,7 +193,7 @@ class Bitmap:
         else:
             row = memoryview(self._data)[row_start : row_start + self._stride]
             if bytes_per_value == 1:
-                row[x] = value
+                struct.pack_into("<B", row, x, value)
             elif bytes_per_value == 2:
                 struct.pack_into("<H", row, x * 2, value)
             elif bytes_per_value == 4:
