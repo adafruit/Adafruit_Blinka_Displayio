@@ -36,8 +36,8 @@ class Rectangle(_VectorShape):
         pixel_shader: Union[ColorConverter, Palette],
         width: int,
         height: int,
-        x: int,
-        y: int,
+        x: int = 0,
+        y: int = 0,
         color_index: int = 0,
     ):
         """Represents a rectangle by defining its bounds

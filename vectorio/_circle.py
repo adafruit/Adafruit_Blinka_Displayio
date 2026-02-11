@@ -35,8 +35,8 @@ class Circle(_VectorShape):
         *,
         pixel_shader: Union[ColorConverter, Palette],
         radius: int,
-        x: int,
-        y: int,
+        x: int = 0,
+        y: int = 0,
     ):
         """Circle is positioned on screen by its center point.
 

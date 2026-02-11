@@ -35,8 +35,8 @@ class Polygon(_VectorShape):
         *,
         pixel_shader: Union[ColorConverter, Palette],
         points: List[Tuple[int, int]],
-        x: int,
-        y: int,
+        x: int = 0,
+        y: int = 0,
     ):
         """Represents a closed shape by ordered vertices. The path will be treated as
         'closed', the last point will connect to the first point.
