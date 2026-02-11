@@ -752,7 +752,7 @@ class TileGrid:
     def tile_height(self) -> int:
         """Height of each tile in pixels"""
         return self._tile_height
-    
+
     def contains(self, touch_tuple: tuple) -> bool:
         """Returns True if the first two values in ``touch_tuple`` represent an x,y coordinate
         inside the tilegrid rectangle bounds.
@@ -762,5 +762,4 @@ class TileGrid:
         x, y, _ = touch_tuple
         right_edge = self._x + (self._width_in_tiles * self._tile_width)
         bottom_edge = self._y + (self._height_in_tiles * self._tile_height)
-        return x >= self._x and x < right_edge and y >= self._y and y < bottom_edge
-        
+        return self._x <= x < right_edge and self._y <= y < bottom_edge
