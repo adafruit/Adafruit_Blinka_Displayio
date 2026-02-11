@@ -37,6 +37,7 @@ class Polygon(_VectorShape):
         points: List[Tuple[int, int]],
         x: int = 0,
         y: int = 0,
+        color_index: int = 0,
     ):
         """Represents a closed shape by ordered vertices. The path will be treated as
         'closed', the last point will connect to the first point.
@@ -48,7 +49,7 @@ class Polygon(_VectorShape):
         :param int y: Initial screen y position of the 0,0 origin in the points list.
         :param int color_index: Initial color_index to use when selecting color from the palette.
         """
-        self._color_index = 1
+        self._color_index = color_index + 1
         self._points = []
         super().__init__(pixel_shader, x, y)
         self.points = points

@@ -37,6 +37,7 @@ class Circle(_VectorShape):
         radius: int,
         x: int = 0,
         y: int = 0,
+        color_index: int = 0,
     ):
         """Circle is positioned on screen by its center point.
 
@@ -48,7 +49,7 @@ class Circle(_VectorShape):
         :param int color_index: Initial color_index to use when selecting color from the palette.
         """
         self._radius = 1
-        self._color_index = 1
+        self._color_index = color_index + 1
         super().__init__(pixel_shader, x, y)
         self.radius = radius
 
