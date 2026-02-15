@@ -142,11 +142,11 @@ class OnDiskBitmap:
 
                     for i in range(number_of_colors):
                         palette._set_color(
-                            palette_data[i], i
+                            i, palette_data[i]
                         )  # pylint: disable=protected-access
                 else:
-                    palette._set_color(0x000000, 0)  # pylint: disable=protected-access
-                    palette._set_color(0xFFFFFF, 1)  # pylint: disable=protected-access
+                    palette._set_color(0, 0x000000)  # pylint: disable=protected-access
+                    palette._set_color(1, 0xFFFFFF)  # pylint: disable=protected-access
                 self._pixel_shader_base = palette
             elif header_size not in (12, 40, 108, 124):
                 raise ValueError(
