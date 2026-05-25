@@ -366,6 +366,8 @@ class BusDisplay:
                 pixels_per_byte = 8 // self._core.colorspace.depth
                 if rows_per_buffer % pixels_per_byte != 0:
                     rows_per_buffer -= rows_per_buffer % pixels_per_byte
+            if rows_per_buffer == 0:
+                rows_per_buffer = 1
             subrectangles = clipped.height() // rows_per_buffer
             if clipped.height() % rows_per_buffer != 0:
                 subrectangles += 1
