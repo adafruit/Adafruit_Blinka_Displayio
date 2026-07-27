@@ -64,11 +64,15 @@ class I2CDisplayBus:
         allocate_display_bus(display_bus_instance)
         return display_bus_instance
 
-    def _release(self):
+    def deinit(self) -> None:
+        """Release the I2C bus and reset pin."""
         self.reset()
         self._i2c.deinit()
         if self._reset is not None:
             self._reset.deinit()
+
+    def _release(self):
+        self.deinit()
 
     def reset(self) -> None:
         """
