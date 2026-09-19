@@ -446,12 +446,15 @@ class TileGrid:
             self._needs_refresh = False
             return
 
-        tail = areas[-1] if areas else None
         # If we have an in-memory bitmap, then check it for modifications
         if isinstance(self._bitmap, Bitmap):
-            self._bitmap._get_refresh_areas(areas)  # pylint: disable=protected-access
-            refresh_area = areas[-1] if areas else None
-            if refresh_area != tail:
+            # Collect the bitmap's dirty area in a scratch list to keep it out of areas.
+            bitmap_areas = []
+            self._bitmap._get_refresh_areas(  # pylint: disable=protected-access
+                bitmap_areas
+            )
+            if bitmap_areas:
+                refresh_area = bitmap_areas[-1]
                 # Special case a TileGrid that shows a full bitmap and use its
                 # dirty area. Copy it to ours so we can transform it.
                 if self._tiles_in_bitmap == 1:
