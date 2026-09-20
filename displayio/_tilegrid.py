@@ -37,17 +37,18 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 def _can_fill_pixels(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
-    """True when _fill_pixels can draw this combination."""
+    """True for a Bitmap of up to 8 bits per value with an undithered Palette on a
+    16 bit display."""
     # pylint: disable=protected-access
     if colorspace.depth != 16 or not isinstance(bitmap, Bitmap):
         return False
     if not isinstance(pixel_shader, Palette) or pixel_shader._dither:
         return False
-    return bitmap._bits_per_value <= 8 and bitmap._data_alloc
+    return bitmap._bits_per_value <= 8
 
 
 def _palette_table(palette: Palette, colorspace: Colorspace, count: int):
-    """Resolve every palette index once. Returns (colors, opaque), indexed by pixel value."""
+    """Resolve every palette index once. Returns (colors, opaque) by pixel value."""
     colors = [0] * count
     opaque = bytearray(count)
     input_pixel = InputPixelStruct()
@@ -65,46 +66,32 @@ def _palette_table(palette: Palette, colorspace: Colorspace, count: int):
     return colors, opaque
 
 
-def _fill_pixels(buffer, mask, tiles, colors, opaque, geometry, grid, source) -> bool:
-    # pylint: disable=too-many-arguments, too-many-locals
+def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, protected-access
     """The pixel loop of TileGrid._fill_area for a Bitmap of up to 8 bits per value
     with a Palette on a 16 bit display. Works on plain ints and flat buffers only.
     Returns False if a transparent pixel was left unset."""
-    (
-        start,
-        x_stride,
-        y_stride,
-        x_shift,
-        y_shift,
-        start_x,
-        end_x,
-        start_y,
-        end_y,
-        scale,
-    ) = geometry
-    (
-        tile_width,
-        tile_height,
-        top_left_x,
-        top_left_y,
-        width_in_tiles,
-        height_in_tiles,
-    ) = grid
-    (
-        words,
-        data_bytes,
-        bytes_per_row,
-        width,
-        height,
-        bitmap_width_in_tiles,
-        bits,
-    ) = source
-    values_shift = 0
-    while (1 << values_shift) < 32 // bits:
-        values_shift += 1
-    values_mask = (1 << values_shift) - 1
-    bitmask = (1 << bits) - 1
-    words_per_row = bytes_per_row // words.itemsize
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    words = bitmap._data
+    data_bytes = memoryview(words).cast("B")
+    words_per_row = bitmap._stride
+    bytes_per_row = words_per_row * words.itemsize
+    width = bitmap._bmp_width
+    height = bitmap._bmp_height
+    bits = bitmap._bits_per_value
+    values_shift = bitmap._x_shift
+    values_mask = bitmap._x_mask
+    bitmask = bitmap._bitmask
 
     full_coverage = True
     for y in range(start_y, end_y):
@@ -411,47 +398,18 @@ class TileGrid:
             x_shift, y_shift = y_shift, x_shift
 
         bitmap = self._bitmap
-        if _can_fill_pixels(colorspace, bitmap, self._pixel_shader):
+        # The table costs one lookup per palette entry, so smaller areas use the loop below.
+        if _can_fill_pixels(colorspace, bitmap, self._pixel_shader) and (
+            end_x - start_x
+        ) * (end_y - start_y) >= len(self._pixel_shader):
             # pylint: disable=protected-access
             colors, opaque = _palette_table(
                 self._pixel_shader, colorspace, 1 << bitmap._bits_per_value
             )
-            data = bitmap._data
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
             covered = _fill_pixels(
-                buffer.cast("B").cast("H"),
-                mask,
-                tiles,
-                colors,
-                opaque,
-                (
-                    start,
-                    x_stride,
-                    y_stride,
-                    x_shift,
-                    y_shift,
-                    start_x,
-                    end_x,
-                    start_y,
-                    end_y,
-                    self._absolute_transform.scale,
-                ),
-                (
-                    self._tile_width,
-                    self._tile_height,
-                    self._top_left_x,
-                    self._top_left_y,
-                    self._width_in_tiles,
-                    self._height_in_tiles,
-                ),
-                (
-                    data,
-                    memoryview(data).cast("B"),
-                    bitmap._stride * data.itemsize,
-                    bitmap._bmp_width,
-                    bitmap._bmp_height,
-                    self._bitmap_width_in_tiles,
-                    bitmap._bits_per_value,
-                ),
+                buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
             )
             return full_coverage and covered
 
