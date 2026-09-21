@@ -39,10 +39,11 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 def _can_fill_pixels(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
     """True for a Bitmap of up to 8 bits per value with an undithered Palette on a
     16 bit display."""
-    # pylint: disable=protected-access
-    if colorspace.depth != 16 or not isinstance(bitmap, Bitmap):
+    # pylint: disable=protected-access, unidiomatic-typecheck
+    # Exact types, since a subclass may override _get_pixel or _get_color.
+    if colorspace.depth != 16 or type(bitmap) is not Bitmap:
         return False
-    if not isinstance(pixel_shader, Palette) or pixel_shader._dither:
+    if type(pixel_shader) is not Palette or pixel_shader._dither:
         return False
     return bitmap._bits_per_value <= 8
 
