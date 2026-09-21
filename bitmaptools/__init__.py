@@ -7,6 +7,7 @@ Collection of bitmap manipulation tools
 
 import math
 import struct
+from collections import deque
 from typing import Optional, Tuple, BinaryIO
 import circuitpython_typing
 from displayio import Bitmap, Colorspace
@@ -881,18 +882,16 @@ def boundary_fill(
     if replaced_color_value == -1:
         replaced_color_value = dest_bitmap[x, y]
 
-    fill_points = []
-    fill_points.append((x, y))
-
-    seen_points = set()
+    fill_points = deque([(x, y)])
+    # Every point ever queued, so each one is queued once.
+    seen_points = {(x, y)}
     minx = x
     miny = y
     maxx = x
     maxy = y
 
     while len(fill_points) > 0:
-        cur_point = fill_points.pop(0)
-        seen_points.add(cur_point)
+        cur_point = fill_points.popleft()
         cur_x = cur_point[0]
         cur_y = cur_point[1]
 
@@ -915,27 +914,15 @@ def boundary_fill(
         left_point = (cur_x - 1, cur_y)
         right_point = (cur_x + 1, cur_y)
 
-        if (
-            above_point[1] >= 0
-            and above_point not in seen_points
-            and above_point not in fill_points
-        ):
+        if above_point[1] >= 0 and above_point not in seen_points:
             fill_points.append(above_point)
-        if (
-            below_point[1] < dest_bitmap.height
-            and below_point not in seen_points
-            and below_point not in fill_points
-        ):
+            seen_points.add(above_point)
+        if below_point[1] < dest_bitmap.height and below_point not in seen_points:
             fill_points.append(below_point)
-        if (
-            left_point[0] >= 0
-            and left_point not in seen_points
-            and left_point not in fill_points
-        ):
+            seen_points.add(below_point)
+        if left_point[0] >= 0 and left_point not in seen_points:
             fill_points.append(left_point)
-        if (
-            right_point[0] < dest_bitmap.width
-            and right_point not in seen_points
-            and right_point not in fill_points
-        ):
+            seen_points.add(left_point)
+        if right_point[0] < dest_bitmap.width and right_point not in seen_points:
             fill_points.append(right_point)
+            seen_points.add(right_point)
