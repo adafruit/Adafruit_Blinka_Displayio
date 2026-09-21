@@ -95,11 +95,17 @@ class Polygon(_VectorShape):
         if len(self._points) == 0:
             return 0
         winding_number = 0
+        point_count = len(self._points)
         x1 = self._points[0][0]
         y1 = self._points[0][1]
-        for i in range(1, len(self._points)):
-            x2 = self._points[i][0]
-            y2 = self._points[i][1]
+        for i in range(1, point_count + 1):
+            # The path is closed (per the class docstring, the last point
+            # connects back to the first), so this must walk point_count
+            # edges, not point_count - 1 -- range(1, point_count) previously
+            # skipped the closing edge, which silently mis-fills any polygon
+            # whose fill parity on some scanline depends on that edge.
+            x2 = self._points[i % point_count][0]
+            y2 = self._points[i % point_count][1]
             if y1 <= y:
                 if y2 > y and self._line_side(x1, y1, x2, y2, x, y) < 0:
                     # Wind up, point is to the left of the edge vector
