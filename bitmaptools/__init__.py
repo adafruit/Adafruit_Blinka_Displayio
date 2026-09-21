@@ -884,7 +884,7 @@ def boundary_fill(
     fill_points = []
     fill_points.append((x, y))
 
-    seen_points = []
+    seen_points = set()
     minx = x
     miny = y
     maxx = x
@@ -892,7 +892,7 @@ def boundary_fill(
 
     while len(fill_points) > 0:
         cur_point = fill_points.pop(0)
-        seen_points.append(cur_point)
+        seen_points.add(cur_point)
         cur_x = cur_point[0]
         cur_y = cur_point[1]
 
