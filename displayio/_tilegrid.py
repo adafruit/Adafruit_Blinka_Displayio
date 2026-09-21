@@ -399,11 +399,13 @@ class TileGrid:
             x_shift, y_shift = y_shift, x_shift
 
         bitmap = self._bitmap
-        # The table costs one lookup per palette entry, so smaller areas use the loop below.
+        # pylint: disable=protected-access
+        # The table costs one lookup per entry it resolves, so smaller areas use the loop below.
         if _can_fill_pixels(colorspace, bitmap, self._pixel_shader) and (
             end_x - start_x
-        ) * (end_y - start_y) >= len(self._pixel_shader):
-            # pylint: disable=protected-access
+        ) * (end_y - start_y) >= min(
+            len(self._pixel_shader), 1 << bitmap._bits_per_value
+        ):
             colors, opaque = _palette_table(
                 self._pixel_shader, colorspace, 1 << bitmap._bits_per_value
             )
