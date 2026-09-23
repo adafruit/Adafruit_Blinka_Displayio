@@ -230,7 +230,8 @@ class ColorConverter:
             blu8 = (pixel << 3) & 0xFF
             return (red8 << 16) | (grn8 << 8) | blu8
         if colorspace in (Colorspace.RGB555, Colorspace.RGB555_SWAPPED):
-            red8 = (pixel >> 10) << 3
+            # 555 leaves a spare bit at the top, so the channel is masked to 5 bits
+            red8 = ((pixel >> 10) & 0x1F) << 3
             grn8 = ((pixel >> 5) << 3) & 0xFF
             blu8 = (pixel << 3) & 0xFF
             return (red8 << 16) | (grn8 << 8) | blu8
@@ -240,7 +241,8 @@ class ColorConverter:
             red8 = (pixel << 3) & 0xFF
             return (red8 << 16) | (grn8 << 8) | blu8
         if colorspace in (Colorspace.BGR555, Colorspace.BGR555_SWAPPED):
-            blu8 = (pixel >> 10) << 3
+            # As above, or the spare bit lands in the green channel below
+            blu8 = ((pixel >> 10) & 0x1F) << 3
             grn8 = ((pixel >> 5) << 3) & 0xFF
             red8 = (pixel << 3) & 0xFF
             return (red8 << 16) | (grn8 << 8) | blu8
