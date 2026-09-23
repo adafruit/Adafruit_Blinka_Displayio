@@ -26,6 +26,13 @@ def fill_region(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: 
     :param int value: Bitmap palette index that will be written into the rectangular
            fill region in the destination bitmap"""
 
+    # A subclass may override __setitem__, so only an exact Bitmap takes the loop below
+    if type(dest_bitmap) is not Bitmap:  # pylint: disable=unidiomatic-typecheck
+        for y in range(y1, y2):
+            for x in range(x1, x2):
+                dest_bitmap[x, y] = value
+        return
+
     # Clip to the bitmap and mark it dirty once
     x1 = max(x1, 0)
     y1 = max(y1, 0)
