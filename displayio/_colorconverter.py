@@ -202,7 +202,9 @@ class ColorConverter:
 
         if not self._dither:
             self._cached_colorspace = colorspace
-            self._cached_input_pixel = input_pixel.pixel
+            # rgb888_pixel is input_pixel, so input_pixel.pixel now holds the
+            # converted color. Cache the value that came in.
+            self._cached_input_pixel = pixel
             self._cached_output_color = output_color.pixel
 
     @staticmethod
