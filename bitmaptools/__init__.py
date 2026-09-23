@@ -26,9 +26,24 @@ def fill_region(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: 
     :param int value: Bitmap palette index that will be written into the rectangular
            fill region in the destination bitmap"""
 
+    # A subclass may override __setitem__, so only an exact Bitmap takes the loop below
+    if type(dest_bitmap) is not Bitmap:  # pylint: disable=unidiomatic-typecheck
+        for y in range(y1, y2):
+            for x in range(x1, x2):
+                dest_bitmap[x, y] = value
+        return
+
+    # Clip to the bitmap and mark it dirty once
+    x1 = max(x1, 0)
+    y1 = max(y1, 0)
+    x2 = min(x2, dest_bitmap.width)
+    y2 = min(y2, dest_bitmap.height)
+    if x1 >= x2 or y1 >= y2:
+        return
+    dest_bitmap.dirty(x1, y1, x2, y2)
     for y in range(y1, y2):
         for x in range(x1, x2):
-            dest_bitmap[x, y] = value
+            dest_bitmap._write_pixel(x, y, value)  # pylint: disable=protected-access
 
 
 def draw_line(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: int):
