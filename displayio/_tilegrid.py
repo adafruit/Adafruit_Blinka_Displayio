@@ -17,6 +17,8 @@ displayio for Blinka
 
 """
 
+# pylint: disable=too-many-lines
+
 import struct
 from typing import Union, Optional, Tuple
 from circuitpython_typing import WriteableBuffer
@@ -127,6 +129,132 @@ def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bo
             else:
                 full_coverage = False
     return full_coverage
+
+
+# Input colorspaces the loop below converts inline, as (byte swap first, formula).
+# The formulas are ColorConverter._convert_pixel followed by _compute_rgb565, worked
+# through: every one is a rearrangement of the input bits.
+# The 555 colorspaces are left out: they shift the top channel without masking it
+# first, so a value of 0x8000 or more converts to a colour outside 16 bits. Those
+# keep the existing loop and its result.
+_CONVERT_RGB565 = 0
+_CONVERT_BGR565 = 1
+_CONVERT_MODES = {
+    Colorspace.RGB565: (False, _CONVERT_RGB565),
+    Colorspace.RGB565_SWAPPED: (True, _CONVERT_RGB565),
+    Colorspace.BGR565: (False, _CONVERT_BGR565),
+    Colorspace.BGR565_SWAPPED: (True, _CONVERT_BGR565),
+}
+
+
+def _can_convert_pixels(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
+    """True for a Bitmap with an undithered ColorConverter on a 16 bit display."""
+    # pylint: disable=protected-access, unidiomatic-typecheck
+    # Exact types, since a subclass may override _get_pixel or _convert.
+    if colorspace.depth != 16 or type(bitmap) is not Bitmap:
+        return False
+    return type(pixel_shader) is ColorConverter and not pixel_shader._dither
+
+
+def _converter_table(converter: ColorConverter, colorspace: Colorspace, count: int):
+    """Convert every value a bitmap can hold, once. Returns (colors, opaque) by pixel
+    value, or None when a color does not fit the display, which the loop below cannot
+    store. The 555 colorspaces do that for values of 0x8000 and up."""
+    colors = [0] * count
+    opaque = bytearray(count)
+    input_pixel = InputPixelStruct()
+    output_pixel = OutputPixelStruct()
+    for value in range(count):
+        input_pixel.pixel = value
+        output_pixel.pixel = 0
+        output_pixel.opaque = True
+        converter._convert(  # pylint: disable=protected-access
+            colorspace, input_pixel, output_pixel
+        )
+        if output_pixel.pixel > 0xFFFF:
+            return None
+        if output_pixel.opaque:
+            colors[value] = output_pixel.pixel
+            opaque[value] = 1
+    return colors, opaque
+
+
+def _inline_convert(colorspace: Colorspace, bitmap, pixel_shader):
+    """How the loop below converts 16 bit values, when a table would need 65536 entries
+    and the pixel shader is a fully opaque ColorConverter in one of the colorspaces in
+    _CONVERT_MODES. Returns (swap input, formula, swap output), or None for the cases
+    that keep the existing loop."""
+    # pylint: disable=protected-access
+    if not _can_convert_pixels(colorspace, bitmap, pixel_shader):
+        return None
+    if bitmap._bits_per_value != 16 or pixel_shader._transparent_color is not None:
+        return None
+    mode = _CONVERT_MODES.get(pixel_shader._input_colorspace)
+    if mode is None:
+        return None
+    return mode + (colorspace.reverse_bytes_in_word,)
+
+
+def _fill_pixels_converted(buffer, mask, convert, geometry, tilegrid, bitmap) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-statements
+    # pylint: disable=protected-access
+    """The pixel loop of TileGrid._fill_area for a Bitmap of 16 bits per value with a
+    ColorConverter on a 16 bit display, where a lookup table would need 65536 entries.
+    Same shape as _fill_pixels, but the colour is computed from the pixel value inline
+    instead of one converter call per pixel. Every pixel is opaque, so this always
+    covers its area."""
+    swap_input, mode, reverse_output = convert
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    words = bitmap._data
+    # 16 bit values are stored in native order, not packed like the smaller ones
+    data_halves = memoryview(words).cast("B").cast("H")
+    halves_per_row = bitmap._stride * words.itemsize // 2
+    width = bitmap._bmp_width
+    height = bitmap._bmp_height
+
+    for y in range(start_y, end_y):
+        row_start = start + (y - start_y + y_shift) * y_stride
+        local_y = y // scale
+        for x in range(start_x, end_x):
+            offset = row_start + (x - start_x + x_shift) * x_stride
+            if mask[offset >> 5] & (1 << (offset & 31)):
+                continue
+            local_x = x // scale
+            tile = tiles[
+                ((local_y // tile_height + top_left_y) % height_in_tiles)
+                * width_in_tiles
+                + (local_x // tile_width + top_left_x) % width_in_tiles
+            ]
+            tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+            tile_y = (
+                tile // bitmap_width_in_tiles
+            ) * tile_height + local_y % tile_height
+            pixel = 0
+            if tile_x < width and tile_y < height:
+                pixel = data_halves[tile_y * halves_per_row + tile_x]
+            if swap_input:
+                pixel = ((pixel << 8) | (pixel >> 8)) & 0xFFFF
+            if mode == _CONVERT_RGB565:
+                color = pixel
+            else:
+                color = (
+                    (pixel & 0x1F) << 11 | ((pixel >> 5) & 0x3F) << 5 | (pixel >> 11)
+                )
+            if reverse_output:
+                color = ((color << 8) | (color >> 8)) & 0xFFFF
+            mask[offset >> 5] |= 1 << (offset & 31)
+            buffer[offset] = color
+    return True
 
 
 class TileGrid:
@@ -330,6 +458,7 @@ class TileGrid:
     ) -> bool:
         """Draw onto the image"""
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+        # pylint: disable=too-many-return-statements
 
         # If no tiles are present we have no impact
         tiles = self._tiles
@@ -413,6 +542,38 @@ class TileGrid:
             geometry += (start_x, end_x, start_y, end_y)
             covered = _fill_pixels(
                 buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
+            )
+            return full_coverage and covered
+
+        # A ColorConverter resolves like a palette when the values fit a table.
+        if (
+            _can_convert_pixels(colorspace, bitmap, self._pixel_shader)
+            and bitmap._bits_per_value <= 8
+            and (end_x - start_x) * (end_y - start_y) >= 1 << bitmap._bits_per_value
+        ):
+            table = _converter_table(
+                self._pixel_shader, colorspace, 1 << bitmap._bits_per_value
+            )
+            if table is not None:
+                geometry = (start, x_stride, y_stride, x_shift, y_shift)
+                geometry += (start_x, end_x, start_y, end_y)
+                covered = _fill_pixels(
+                    buffer.cast("B").cast("H"),
+                    mask,
+                    table[0],
+                    table[1],
+                    geometry,
+                    self,
+                    bitmap,
+                )
+                return full_coverage and covered
+
+        convert = _inline_convert(colorspace, bitmap, self._pixel_shader)
+        if convert is not None:
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
+            covered = _fill_pixels_converted(
+                buffer.cast("B").cast("H"), mask, convert, geometry, self, bitmap
             )
             return full_coverage and covered
 
