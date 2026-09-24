@@ -181,6 +181,13 @@ class Group:
             if isinstance(layer, (Group, TileGrid, _VectorShape)):
                 layer._finish_refresh()  # pylint: disable=protected-access
 
+    def _prepare_full_refresh(self):
+        for layer in reversed(self._layers):
+            if isinstance(layer, Group):
+                layer._prepare_full_refresh()  # pylint: disable=protected-access
+            elif isinstance(layer, _VectorShape):
+                layer._prepare_full_refresh()  # pylint: disable=protected-access
+
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         # pylint: disable=protected-access
         for layer in reversed(self._layers):

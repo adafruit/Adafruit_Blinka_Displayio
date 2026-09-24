@@ -315,6 +315,8 @@ class BusDisplay:
         """Get a list of areas to be refreshed"""
         areas = []
         if self._core.full_refresh:
+            if self._core.current_group is not None:
+                self._core.current_group._prepare_full_refresh()  # pylint: disable=protected-access
             areas.append(self._core.area)
         elif self._core.current_group is not None:
             self._core.current_group._get_refresh_areas(  # pylint: disable=protected-access
