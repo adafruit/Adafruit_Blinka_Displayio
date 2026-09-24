@@ -51,7 +51,7 @@ class _VectorShape:
         # deque append and popleft are thread-safe in CPython. Dirty areas queued
         # during display I/O remain separate from the refresh-owned areas above.
         self._pending_dirty_areas = deque()
-        self._refresh_shape_dirty = False
+        self._refresh_state_dirty = False
         self._absolute_transform = null_transform
         self._get_screen_area(self._current_area)
         initial_area = Area()
@@ -331,9 +331,9 @@ class _VectorShape:
         return full_coverage
 
     def _finish_refresh(self) -> None:
-        if not self._refresh_shape_dirty:
+        if not self._refresh_state_dirty:
             return
-        self._refresh_shape_dirty = False
+        self._refresh_state_dirty = False
 
         if isinstance(self._pixel_shader, (Palette, ColorConverter)):
             self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
@@ -363,7 +363,11 @@ class _VectorShape:
 
     def _prepare_full_refresh(self) -> None:
         """Consume dirty state covered by a full display refresh."""
-        self._refresh_shape_dirty = self._consume_dirty_areas()
+        shader_dirty = (
+            isinstance(self._pixel_shader, (Palette, ColorConverter))
+            and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
+        )
+        self._refresh_state_dirty = self._consume_dirty_areas() or shader_dirty
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         shader_dirty = (
@@ -373,10 +377,11 @@ class _VectorShape:
         if not self._pending_dirty_areas and not shader_dirty:
             return
 
-        self._refresh_shape_dirty = self._consume_dirty_areas()
+        shape_dirty = self._consume_dirty_areas()
+        self._refresh_state_dirty = shape_dirty or shader_dirty
         current_area = self._refresh_current_area
         ephemeral_dirty_area = self._ephemeral_dirty_area
-        if self._refresh_shape_dirty or shader_dirty:
+        if shape_dirty or shader_dirty:
             if not ephemeral_dirty_area.empty():
                 # Both are dirty, check if we should combine the areas or draw separately
                 # Draws as few pixels as possible both when animations move short distances
