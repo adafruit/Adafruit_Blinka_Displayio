@@ -18,6 +18,7 @@ vectorio for Blinka
 """
 
 import struct
+from collections import deque
 from typing import Union, Tuple
 from circuitpython_typing import WriteableBuffer
 from displayio._colorconverter import ColorConverter
@@ -31,6 +32,8 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
 class _VectorShape:
+    _dirty_area_sentinel = object()
+
     def __init__(
         self,
         pixel_shader: Union[ColorConverter, Palette],
@@ -41,11 +44,19 @@ class _VectorShape:
         self._y = y
         self._pixel_shader = pixel_shader
         self._hidden = False
-        self._current_area_dirty = True
         self._current_area = Area(0, 0, 0, 0)
         self._ephemeral_dirty_area = Area(0, 0, 0, 0)
+        self._refresh_current_area = Area(0, 0, 0, 0)
+        self._refresh_area_swap = Area(0, 0, 0, 0)
+        # deque append and popleft are thread-safe in CPython. Dirty areas queued
+        # during display I/O remain separate from the refresh-owned areas above.
+        self._pending_dirty_areas = deque()
+        self._refresh_state_dirty = False
         self._absolute_transform = null_transform
         self._get_screen_area(self._current_area)
+        initial_area = Area()
+        self._current_area.copy_into(initial_area)
+        self._pending_dirty_areas.append(initial_area)
 
     @property
     def x(self) -> int:
@@ -120,17 +131,8 @@ class _VectorShape:
     def _shape_set_dirty(self) -> None:
         current_area = Area()
         self._get_screen_area(current_area)
-        moved = current_area != self._current_area
-        if moved:
-            # This will add _current_area (the old position) to dirty area
-            self._current_area.union(
-                self._ephemeral_dirty_area, self._ephemeral_dirty_area
-            )
-            # This will add the new position to the dirty area
-            current_area.union(self._ephemeral_dirty_area, self._ephemeral_dirty_area)
-            # Dirty area tracks the shape's footprint between draws.  It's reset on refresh finish.
-            current_area.copy_into(self._current_area)
-        self._current_area_dirty = True
+        current_area.copy_into(self._current_area)
+        self._pending_dirty_areas.append(current_area)
 
     def _get_dirty_area(self, out_area: Area) -> Area:
         out_area.x1 = out_area.x2
@@ -329,35 +331,70 @@ class _VectorShape:
         return full_coverage
 
     def _finish_refresh(self) -> None:
-        if self._ephemeral_dirty_area.empty() and not self._current_area_dirty:
+        if not self._refresh_state_dirty:
             return
-        # Reset dirty area to nothing
-        self._ephemeral_dirty_area.x1 = self._ephemeral_dirty_area.x2
-        self._current_area_dirty = False
+        self._refresh_state_dirty = False
 
         if isinstance(self._pixel_shader, (Palette, ColorConverter)):
             self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
 
-    def _get_refresh_areas(self, areas: list[Area]) -> None:
-        if self._current_area_dirty or (
+    def _consume_dirty_areas(self) -> bool:
+        """Collect a stable snapshot of the dirty areas queued for this refresh."""
+        # The sentinel is an atomic frame boundary. Anything appended after it
+        # remains queued for the next refresh.
+        self._pending_dirty_areas.append(self._dirty_area_sentinel)
+        area = self._pending_dirty_areas.popleft()
+        if area is self._dirty_area_sentinel:
+            self._ephemeral_dirty_area.x1 = self._ephemeral_dirty_area.x2
+            return False
+
+        self._refresh_current_area.union(area, self._ephemeral_dirty_area)
+        area.copy_into(self._refresh_current_area)
+        while True:
+            area = self._pending_dirty_areas.popleft()
+            if area is self._dirty_area_sentinel:
+                break
+            self._refresh_current_area.union(area, self._refresh_area_swap)
+            self._refresh_area_swap.union(
+                self._ephemeral_dirty_area, self._ephemeral_dirty_area
+            )
+            area.copy_into(self._refresh_current_area)
+        return True
+
+    def _prepare_full_refresh(self) -> None:
+        """Consume dirty state covered by a full display refresh."""
+        shader_dirty = (
             isinstance(self._pixel_shader, (Palette, ColorConverter))
             and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
-        ):
-            if not self._ephemeral_dirty_area.empty():
+        )
+        self._refresh_state_dirty = self._consume_dirty_areas() or shader_dirty
+
+    def _get_refresh_areas(self, areas: list[Area]) -> None:
+        shader_dirty = (
+            isinstance(self._pixel_shader, (Palette, ColorConverter))
+            and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
+        )
+        if not self._pending_dirty_areas and not shader_dirty:
+            return
+
+        shape_dirty = self._consume_dirty_areas()
+        self._refresh_state_dirty = shape_dirty or shader_dirty
+        current_area = self._refresh_current_area
+        ephemeral_dirty_area = self._ephemeral_dirty_area
+        if shape_dirty or shader_dirty:
+            if not ephemeral_dirty_area.empty():
                 # Both are dirty, check if we should combine the areas or draw separately
                 # Draws as few pixels as possible both when animations move short distances
                 # and large distances. The display core implementation currently doesn't
                 # combine areas to reduce redrawing of masked areas. If it does, this could
                 # be simplified to just return the 2 possibly overlapping areas.
-                area_swap = Area()
-                self._ephemeral_dirty_area.compute_overlap(
-                    self._current_area, area_swap
-                )
+                area_swap = self._refresh_area_swap
+                ephemeral_dirty_area.compute_overlap(current_area, area_swap)
                 overlap_size = area_swap.size()
-                self._ephemeral_dirty_area.union(self._current_area, area_swap)
+                ephemeral_dirty_area.union(current_area, area_swap)
                 union_size = area_swap.size()
-                current_size = self._current_area.size()
-                dirty_size = self._ephemeral_dirty_area.size()
+                current_size = current_area.size()
+                dirty_size = ephemeral_dirty_area.size()
 
                 if union_size - dirty_size - current_size + overlap_size <= min(
                     dirty_size, current_size
@@ -366,17 +403,17 @@ class _VectorShape:
                     # areas is smaller than the smallest area we need to draw. Redrawing the
                     # overlapping area would cost more than just drawing the union disjoint
                     # area once.
-                    area_swap.copy_into(self._ephemeral_dirty_area)
+                    area_swap.copy_into(ephemeral_dirty_area)
                 else:
                     # The excluded area between the 2 dirty areas is larger than the smallest
                     # dirty area. It would be more costly to combine these areas than possibly
                     # redraw some overlap.
-                    areas.append(self._current_area)
-                areas.append(self._ephemeral_dirty_area)
+                    areas.append(current_area)
+                areas.append(ephemeral_dirty_area)
             else:
-                areas.append(self._current_area)
-        elif not self._ephemeral_dirty_area.empty():
-            areas.append(self._ephemeral_dirty_area)
+                areas.append(current_area)
+        elif not ephemeral_dirty_area.empty():
+            areas.append(ephemeral_dirty_area)
 
     def _update_transform(self, group_transform) -> None:
         self._absolute_transform = (
