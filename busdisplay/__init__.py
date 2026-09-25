@@ -347,8 +347,13 @@ class BusDisplay:
         pixels_per_word = 32 // self._core.colorspace.depth
         pixels_per_buffer = clipped.size()
 
-        # We should have lots of memory
+        # We should have lots of memory, so take the whole area in one pass. Round
+        # up: a buffer one word short sends the area as several subrectangles, and
+        # on a display that packs several rows into a byte those do not land on a
+        # byte boundary, which writes past the buffer or asks for a negative row.
         buffer_size = clipped.size() // pixels_per_word
+        if clipped.size() % pixels_per_word:
+            buffer_size += 1
 
         subrectangles = 1
         # for SH1107 and other boundary constrained controllers
@@ -360,11 +365,8 @@ class BusDisplay:
             rows_per_buffer = buffer_size * pixels_per_word // clipped.width()
             if rows_per_buffer == 0:
                 rows_per_buffer = 1
-            # If pixels are packed by column then ensure rows_per_buffer is on a byte boundary
-            if (
-                self._core.colorspace.depth < 8
-                and self._core.colorspace.pixels_in_byte_share_row
-            ):
+            # Several pixels share a byte, so keep rows_per_buffer on a byte boundary
+            if self._core.colorspace.depth < 8:
                 pixels_per_byte = 8 // self._core.colorspace.depth
                 if rows_per_buffer % pixels_per_byte != 0:
                     rows_per_buffer -= rows_per_buffer % pixels_per_byte
