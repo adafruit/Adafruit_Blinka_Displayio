@@ -551,7 +551,6 @@ class TileGrid:
         """Draw onto the image"""
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         # pylint: disable=too-many-return-statements
-        # pylint: disable=too-many-return-statements
 
         # If no tiles are present we have no impact
         tiles = self._tiles
