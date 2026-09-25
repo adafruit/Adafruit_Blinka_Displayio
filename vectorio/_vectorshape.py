@@ -31,6 +31,75 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
+def _shape_color(colorspace: Colorspace, shape, pixel_shader):
+    """The one color a stock shape draws, resolved once, or None when the loop below
+    does not apply: another display depth, a dithered or subclassed palette, a shape
+    that is not one of the three here, or a color index outside the palette."""
+    # pylint: disable=protected-access, unidiomatic-typecheck, import-outside-toplevel
+    if colorspace.depth != 16:
+        return None
+    if type(pixel_shader) is not Palette or pixel_shader._dither:
+        return None
+    # Imported here because each shape module imports this one
+    from ._circle import Circle
+    from ._polygon import Polygon
+    from ._rectangle import Rectangle
+
+    # Exact types, since a subclass may return something else from _get_pixel
+    if type(shape) not in (Circle, Polygon, Rectangle):
+        return None
+    index = shape._color_index - 1
+    if not 0 <= index < len(pixel_shader):
+        return None
+    input_pixel = InputPixelStruct()
+    output_pixel = OutputPixelStruct()
+    input_pixel.pixel = index
+    output_pixel.pixel = 0
+    output_pixel.opaque = True
+    pixel_shader._get_color(colorspace, input_pixel, output_pixel)
+    if not output_pixel.opaque:
+        return None
+    return output_pixel.pixel
+
+
+def _fill_shape_pixels(buffer, mask, color, geometry, shape, transform) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, protected-access
+    # pylint: disable=invalid-name
+    """The pixel loop of _VectorShape._fill_area for one of the stock shapes with a
+    Palette on a 16 bit display. Same shape as the loop it replaces, but the color is
+    resolved once and the screen to shape transform is worked out here, which leaves
+    one of the two shape coordinates the same all the way along a row. Returns False
+    if any pixel of the area was left uncovered."""
+    start_px, linestride_px, x1, y1, x2, y2 = geometry
+    transpose, shape_origin_x, shape_origin_y, sign_x, sign_y = transform
+    get_pixel = shape._get_pixel
+
+    full_coverage = True
+    row_start_px = start_px
+    for y in range(y1, y2):
+        if transpose:
+            # x and y swap roles, so the first shape coordinate is fixed for this row
+            shape_x = (y - shape_origin_x) * sign_x
+        else:
+            shape_y = (y - shape_origin_y) * sign_y
+        for x in range(x1, x2):
+            pixel_index = row_start_px + (x - x1)
+            if mask[pixel_index >> 5] & (1 << (pixel_index & 31)):
+                continue
+            if transpose:
+                shape_y = (x - shape_origin_y) * sign_y
+            else:
+                shape_x = (x - shape_origin_x) * sign_x
+            if get_pixel(shape_x, shape_y) == 0:
+                # vectorio shapes use 0 to mean the area is not covered
+                full_coverage = False
+                continue
+            mask[pixel_index >> 5] |= 1 << (pixel_index & 31)
+            buffer[pixel_index] = color
+        row_start_px += linestride_px
+    return full_coverage
+
+
 class _VectorShape:
     _dirty_area_sentinel = object()
 
@@ -237,6 +306,35 @@ class _VectorShape:
         linestride_px = area.width()
         line_dirty_offset_px = (overlap.y1 - area.y1) * linestride_px
         column_dirty_offset_px = overlap.x1 - area.x1
+
+        color = _shape_color(colorspace, self, self._pixel_shader)
+        if color is not None:
+            xform = self._absolute_transform
+            if xform.transpose_xy:
+                origin_x = xform.y + xform.dy * self._x
+                origin_y = xform.x + xform.dx * self._y
+            else:
+                origin_x = xform.x + xform.dx * self._x
+                origin_y = xform.y + xform.dy * self._y
+            transform = (
+                xform.transpose_xy,
+                origin_x,
+                origin_y,
+                -1 if xform.dx < 1 else 1,
+                -1 if xform.dy < 1 else 1,
+            )
+            geometry = (
+                line_dirty_offset_px + column_dirty_offset_px,
+                linestride_px,
+                overlap.x1,
+                overlap.y1,
+                overlap.x2,
+                overlap.y2,
+            )
+            covered = _fill_shape_pixels(
+                buffer.cast("B").cast("H"), mask, color, geometry, self, transform
+            )
+            return full_coverage and covered
 
         input_pixel = InputPixelStruct()
         output_pixel = OutputPixelStruct()
