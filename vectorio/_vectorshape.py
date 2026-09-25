@@ -31,10 +31,19 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 
-def _shape_color(colorspace: Colorspace, shape, pixel_shader):
-    """The one color a stock shape draws, resolved once, or None when the loop below
-    does not apply: another display depth, a dithered or subclassed palette, a shape
-    that is not one of the three here, or a color index outside the palette."""
+# How the loop below decides whether a pixel is covered. A rectangle and a circle
+# are a couple of comparisons, so the loop does them itself rather than calling the
+# shape once per pixel. Anything else asks the shape.
+_COVER_RECTANGLE = 0
+_COVER_CIRCLE = 1
+_COVER_ASK_SHAPE = 2
+
+
+def _shape_fast_path(colorspace: Colorspace, shape, pixel_shader):
+    """(color, how to test coverage, the two numbers that test needs) for a stock
+    shape, or None when the loop below does not apply: another display depth, a
+    dithered or subclassed palette, a shape that is not one of the three here, or a
+    color index outside the palette."""
     # pylint: disable=protected-access, unidiomatic-typecheck, import-outside-toplevel
     if colorspace.depth != 16:
         return None
@@ -46,7 +55,16 @@ def _shape_color(colorspace: Colorspace, shape, pixel_shader):
     from ._rectangle import Rectangle
 
     # Exact types, since a subclass may return something else from _get_pixel
-    if type(shape) not in (Circle, Polygon, Rectangle):
+    kind = type(shape)
+    if kind is Rectangle:
+        # _get_pixel is 0 <= x < width and 0 <= y < height
+        cover = (_COVER_RECTANGLE, shape._width, shape._height)
+    elif kind is Circle:
+        # _get_pixel works out to x * x + y * y <= radius * radius
+        cover = (_COVER_CIRCLE, shape._radius, shape._radius * shape._radius)
+    elif kind is Polygon:
+        cover = (_COVER_ASK_SHAPE, 0, 0)
+    else:
         return None
     index = shape._color_index - 1
     if not 0 <= index < len(pixel_shader):
@@ -59,38 +77,64 @@ def _shape_color(colorspace: Colorspace, shape, pixel_shader):
     pixel_shader._get_color(colorspace, input_pixel, output_pixel)
     if not output_pixel.opaque:
         return None
-    return output_pixel.pixel
+    return (output_pixel.pixel,) + cover
 
 
-def _fill_shape_pixels(buffer, mask, color, geometry, shape, transform) -> bool:
-    # pylint: disable=too-many-arguments, too-many-locals, protected-access
-    # pylint: disable=invalid-name
+def _fill_shape_pixels(buffer, mask, cover, geometry, shape, transform) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint: disable=too-many-statements, protected-access, invalid-name
     """The pixel loop of _VectorShape._fill_area for one of the stock shapes with a
     Palette on a 16 bit display. Same shape as the loop it replaces, but the color is
-    resolved once and the screen to shape transform is worked out here, which leaves
-    one of the two shape coordinates the same all the way along a row. Returns False
-    if any pixel of the area was left uncovered."""
+    resolved once, the screen to shape transform is worked out here, and a rectangle
+    or a circle is tested with a couple of comparisons instead of a call per pixel.
+    The transform leaves one shape coordinate the same all the way along a row, so a
+    row outside the shape is skipped whole. Returns False if any pixel of the area
+    was left uncovered."""
+    color, how, cover_a, cover_b = cover
     start_px, linestride_px, x1, y1, x2, y2 = geometry
     transpose, shape_origin_x, shape_origin_y, sign_x, sign_y = transform
     get_pixel = shape._get_pixel
+    if transpose:
+        # x and y swap roles, so the shape's x is what stays fixed along a row
+        row_origin, row_sign = shape_origin_x, sign_x
+        col_origin, col_sign = shape_origin_y, sign_y
+        row_len, col_len = cover_a, cover_b
+    else:
+        row_origin, row_sign = shape_origin_y, sign_y
+        col_origin, col_sign = shape_origin_x, sign_x
+        row_len, col_len = cover_b, cover_a
 
     full_coverage = True
     row_start_px = start_px
     for y in range(y1, y2):
-        if transpose:
-            # x and y swap roles, so the first shape coordinate is fixed for this row
-            shape_x = (y - shape_origin_x) * sign_x
-        else:
-            shape_y = (y - shape_origin_y) * sign_y
+        row_coord = (y - row_origin) * row_sign
+        limit = 0
+        if how == _COVER_RECTANGLE:
+            if not 0 <= row_coord < row_len:
+                full_coverage = False  # the whole row is outside the rectangle
+                row_start_px += linestride_px
+                continue
+            limit = col_len
+        elif how == _COVER_CIRCLE:
+            if row_coord > cover_a or row_coord < -cover_a:
+                full_coverage = False  # the whole row is outside the circle
+                row_start_px += linestride_px
+                continue
+            limit = cover_b - row_coord * row_coord
         for x in range(x1, x2):
             pixel_index = row_start_px + (x - x1)
             if mask[pixel_index >> 5] & (1 << (pixel_index & 31)):
                 continue
-            if transpose:
-                shape_y = (x - shape_origin_y) * sign_y
+            col_coord = (x - col_origin) * col_sign
+            if how == _COVER_RECTANGLE:
+                covered = 0 <= col_coord < limit
+            elif how == _COVER_CIRCLE:
+                covered = col_coord * col_coord <= limit
+            elif transpose:
+                covered = get_pixel(row_coord, col_coord) != 0
             else:
-                shape_x = (x - shape_origin_x) * sign_x
-            if get_pixel(shape_x, shape_y) == 0:
+                covered = get_pixel(col_coord, row_coord) != 0
+            if not covered:
                 # vectorio shapes use 0 to mean the area is not covered
                 full_coverage = False
                 continue
@@ -307,8 +351,8 @@ class _VectorShape:
         line_dirty_offset_px = (overlap.y1 - area.y1) * linestride_px
         column_dirty_offset_px = overlap.x1 - area.x1
 
-        color = _shape_color(colorspace, self, self._pixel_shader)
-        if color is not None:
+        cover = _shape_fast_path(colorspace, self, self._pixel_shader)
+        if cover is not None:
             xform = self._absolute_transform
             if xform.transpose_xy:
                 origin_x = xform.y + xform.dy * self._x
@@ -332,7 +376,7 @@ class _VectorShape:
                 overlap.y2,
             )
             covered = _fill_shape_pixels(
-                buffer.cast("B").cast("H"), mask, color, geometry, self, transform
+                buffer.cast("B").cast("H"), mask, cover, geometry, self, transform
             )
             return full_coverage and covered
 
