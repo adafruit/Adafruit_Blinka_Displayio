@@ -131,6 +131,98 @@ def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bo
     return full_coverage
 
 
+def _can_fill_packed(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
+    """True for a Bitmap of up to 8 bits per value with an undithered Palette on a
+    display of fewer than 8 bits per pixel, where several pixels share a byte."""
+    # pylint: disable=protected-access, unidiomatic-typecheck
+    # Exact types, since a subclass may override _get_pixel or _get_color.
+    if colorspace.depth >= 8 or type(bitmap) is not Bitmap:
+        return False
+    if type(pixel_shader) is not Palette or pixel_shader._dither:
+        return False
+    return bitmap._bits_per_value <= 8
+
+
+def _fill_pixels_packed(buffer, mask, colors, opaque, geometry, tilegrid, bitmap, pack):
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-statements
+    # pylint: disable=protected-access
+    """The pixel loop of TileGrid._fill_area for a Bitmap of up to 8 bits per value
+    with a Palette on a display of fewer than 8 bits per pixel, such as a mono OLED.
+    Same shape as _fill_pixels, but several pixels share an output byte, so the byte
+    and the shift within it are worked out per pixel. Returns False if a transparent
+    pixel was left unset."""
+    depth, pixels_per_byte, reverse_in_byte, share_row, area_width = pack
+    top_shift = (pixels_per_byte - 1) * depth
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    words = bitmap._data
+    data_bytes = memoryview(words).cast("B")
+    words_per_row = bitmap._stride
+    bytes_per_row = words_per_row * words.itemsize
+    width = bitmap._bmp_width
+    height = bitmap._bmp_height
+    bits = bitmap._bits_per_value
+    values_shift = bitmap._x_shift
+    values_mask = bitmap._x_mask
+    bitmask = bitmap._bitmask
+
+    full_coverage = True
+    for y in range(start_y, end_y):
+        row_start = start + (y - start_y + y_shift) * y_stride
+        local_y = y // scale
+        for x in range(start_x, end_x):
+            offset = row_start + (x - start_x + x_shift) * x_stride
+            if mask[offset >> 5] & (1 << (offset & 31)):
+                continue
+            local_x = x // scale
+            tile = tiles[
+                ((local_y // tile_height + top_left_y) % height_in_tiles)
+                * width_in_tiles
+                + (local_x // tile_width + top_left_x) % width_in_tiles
+            ]
+            tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+            tile_y = (
+                tile // bitmap_width_in_tiles
+            ) * tile_height + local_y % tile_height
+            pixel = 0
+            if tile_x < width and tile_y < height:
+                if bits == 8:
+                    pixel = data_bytes[tile_y * bytes_per_row + tile_x]
+                else:
+                    pixel = (
+                        words[tile_y * words_per_row + (tile_x >> values_shift)]
+                        >> (32 - ((tile_x & values_mask) + 1) * bits)
+                    ) & bitmask
+            if not opaque[pixel]:
+                full_coverage = False
+                continue
+            mask[offset >> 5] |= 1 << (offset & 31)
+            packed = offset
+            if not share_row:
+                # Several rows share a byte, so they share a column instead
+                row = offset // area_width
+                col = offset % area_width
+                packed = (
+                    col * pixels_per_byte
+                    + (row // pixels_per_byte) * pixels_per_byte * area_width
+                    + row % pixels_per_byte
+                )
+            shift = (packed % pixels_per_byte) * depth
+            if reverse_in_byte:
+                shift = top_shift - shift
+            buffer[packed // pixels_per_byte] |= colors[pixel] << shift
+    return full_coverage
+
+
 # Input colorspaces the loop below converts inline, as (byte swap first, formula).
 # The formulas are ColorConverter._convert_pixel followed by _compute_rgb565, worked
 # through: every one is a rearrangement of the input bits.
@@ -578,6 +670,29 @@ class TileGrid:
             return full_coverage and covered
 
         pixels_per_byte = 8 // colorspace.depth
+
+        # A display of fewer than 8 bits per pixel packs several pixels into a byte.
+        if _can_fill_packed(colorspace, bitmap, self._pixel_shader) and (
+            end_x - start_x
+        ) * (end_y - start_y) >= min(
+            len(self._pixel_shader), 1 << bitmap._bits_per_value
+        ):
+            colors, opaque = _palette_table(
+                self._pixel_shader, colorspace, 1 << bitmap._bits_per_value
+            )
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
+            pack = (
+                colorspace.depth,
+                pixels_per_byte,
+                colorspace.reverse_pixels_in_byte,
+                colorspace.pixels_in_byte_share_row,
+                area.width(),
+            )
+            covered = _fill_pixels_packed(
+                buffer.cast("B"), mask, colors, opaque, geometry, self, bitmap, pack
+            )
+            return full_coverage and covered
 
         input_pixel = InputPixelStruct()
         output_pixel = OutputPixelStruct()
