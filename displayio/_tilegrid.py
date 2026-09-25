@@ -307,6 +307,116 @@ def _fill_pixels_ondisk(
     return full_coverage
 
 
+def _can_convert_ondisk(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
+    """True for a 16 or 24 bit OnDiskBitmap with a fully opaque undithered ColorConverter
+    on a 16 bit display. A 32 bit file is left out: its top byte reaches the red channel
+    of a conversion that shifts without masking it, so the colour comes out beyond 16
+    bits. Those keep the existing loop and its result."""
+    # pylint: disable=protected-access, unidiomatic-typecheck, too-many-return-statements
+    # Exact types, since a subclass may override _get_pixel or _convert.
+    if colorspace.depth != 16 or type(bitmap) is not OnDiskBitmap:
+        return False
+    if type(pixel_shader) is not ColorConverter or pixel_shader._dither:
+        return False
+    if pixel_shader._transparent_color is not None:
+        return False
+    if pixel_shader._input_colorspace != Colorspace.RGB888:
+        return False
+    if bitmap._bits_per_pixel == 24:
+        return True
+    if bitmap._bits_per_pixel != 16:
+        return False
+    # Only the two standard channel layouts, so each channel stays inside its field
+    return (bitmap._r_bitmask, bitmap._g_bitmask, bitmap._b_bitmask) in (
+        (0xF800, 0x07E0, 0x001F),
+        (0x7C00, 0x03E0, 0x001F),
+    )
+
+
+def _fill_pixels_ondisk_rgb(
+    buffer, mask, reverse_output, geometry, tilegrid, bitmap
+) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint: disable=too-many-statements, too-many-nested-blocks, protected-access
+    """The pixel loop of TileGrid._fill_area for a 16 or 24 bit OnDiskBitmap with a
+    ColorConverter on a 16 bit display, where the colours are too many for a table.
+    Same row reads as _fill_pixels_ondisk, but the colour is computed from the file
+    bytes inline instead of one _get_pixel and one converter call per pixel. Every
+    pixel is opaque, so this always covers its area."""
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    file = bitmap._file
+    data_offset = bitmap._data_offset
+    file_stride = bitmap._stride
+    width = bitmap._width
+    height = bitmap._height
+    bits = bitmap._bits_per_pixel
+    # A 565 file already holds the colour the display wants. The other layouts are
+    # the same channels in other places, so each one is a rearrangement of the bits.
+    is_565 = bits == 16 and bitmap._g_bitmask == 0x07E0
+    cached_row = -1
+    row_data = b""
+
+    for y in range(start_y, end_y):
+        row_start = start + (y - start_y + y_shift) * y_stride
+        local_y = y // scale
+        for x in range(start_x, end_x):
+            offset = row_start + (x - start_x + x_shift) * x_stride
+            if mask[offset >> 5] & (1 << (offset & 31)):
+                continue
+            local_x = x // scale
+            tile = tiles[
+                ((local_y // tile_height + top_left_y) % height_in_tiles)
+                * width_in_tiles
+                + (local_x // tile_width + top_left_x) % width_in_tiles
+            ]
+            tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+            tile_y = (
+                tile // bitmap_width_in_tiles
+            ) * tile_height + local_y % tile_height
+            color = 0
+            if tile_x < width and tile_y < height:
+                file_row = height - tile_y - 1
+                if file_row != cached_row:
+                    file.seek(data_offset + file_row * file_stride)
+                    row_data = file.read(file_stride)
+                    cached_row = file_row
+                if bits == 16:
+                    index = tile_x * 2
+                    if index + 1 < len(row_data):
+                        value = row_data[index] | row_data[index + 1] << 8
+                        if is_565:
+                            color = value
+                        else:  # 555, one bit narrower in red and green
+                            color = (
+                                ((value & 0x7C00) >> 10) << 11
+                                | ((value & 0x03E0) >> 4) << 5
+                                | (value & 0x1F)
+                            )
+                else:
+                    index = tile_x * 3
+                    if index + 2 < len(row_data):
+                        color = (
+                            (row_data[index + 2] >> 3) << 11
+                            | (row_data[index + 1] >> 2) << 5
+                            | (row_data[index] >> 3)
+                        )
+            if reverse_output:
+                color = ((color << 8) | (color >> 8)) & 0xFFFF
+            mask[offset >> 5] |= 1 << (offset & 31)
+            buffer[offset] = color
+    return True
+
+
 # Input colorspaces the loop below converts inline, as (byte swap first, formula).
 # The formulas are ColorConverter._convert_pixel followed by _compute_rgb565, worked
 # through: every one is a rearrangement of the input bits.
@@ -734,6 +844,20 @@ class TileGrid:
             geometry += (start_x, end_x, start_y, end_y)
             covered = _fill_pixels_ondisk(
                 buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
+            )
+            return full_coverage and covered
+
+        # A 16 or 24 bit OnDiskBitmap holds colours, so the loop converts them inline.
+        if _can_convert_ondisk(colorspace, bitmap, self._pixel_shader):
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
+            covered = _fill_pixels_ondisk_rgb(
+                buffer.cast("B").cast("H"),
+                mask,
+                colorspace.reverse_bytes_in_word,
+                geometry,
+                self,
+                bitmap,
             )
             return full_coverage and covered
 
