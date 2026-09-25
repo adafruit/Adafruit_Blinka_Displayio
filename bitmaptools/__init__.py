@@ -220,9 +220,7 @@ def blit(
                 dest_bitmap.height > y_placement >= 0
             ):  # ensure placement is within target bitmap
                 # get the palette index from the source bitmap
-                this_pixel_color = source_bitmap[
-                    y1 + (y_count * source_bitmap.width) + x1 + x_count
-                ]
+                this_pixel_color = source_bitmap[x1 + x_count, y1 + y_count]
 
                 if (skip_source_index is None) or (
                     this_pixel_color != skip_source_index
