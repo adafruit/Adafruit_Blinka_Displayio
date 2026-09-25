@@ -234,6 +234,50 @@ def _can_fill_ondisk(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
     return bitmap._bits_per_pixel <= 8
 
 
+def _ondisk_column_span(geometry, tilegrid, bitmap):
+    """The lowest and highest source column this fill will ask for, so a row read
+    covers only those and a clipped draw does not read the whole row. One pass over
+    the x range, against the pixel loop's x by y, so it costs nothing to be exact."""
+    # pylint: disable=protected-access, too-many-locals
+    start_x, end_x = geometry[5], geometry[6]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    top_left_x = tilegrid._top_left_x
+    width_in_tiles = tilegrid._width_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    width = bitmap._width
+    low = width
+    high = -1
+    for x in range(start_x, end_x):
+        local_x = x // scale
+        # Every row uses the same columns, so the tile row does not matter here
+        tile = tiles[(local_x // tile_width + top_left_x) % width_in_tiles]
+        tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+        if tile_x < width:
+            low = min(low, tile_x)
+            high = max(high, tile_x)
+    return low, high
+
+
+def _ondisk_read_row(file, offset, length):
+    """Read exactly length bytes. A stream may return fewer than asked for without
+    being at the end, so keep reading until it is full or the stream stops giving."""
+    file.seek(offset)
+    data = file.read(length)
+    if len(data) < length:
+        chunks = [data]
+        got = len(data)
+        while got < length:
+            more = file.read(length - got)
+            if not more:
+                break
+            chunks.append(more)
+            got += len(more)
+        data = b"".join(chunks)
+    return data
+
+
 def _fill_pixels_ondisk(
     buffer, mask, colors, opaque, geometry, tilegrid, bitmap
 ) -> bool:
@@ -262,6 +306,12 @@ def _fill_pixels_ondisk(
     bits = bitmap._bits_per_pixel
     pixels_per_byte = 8 // bits
     bitmask = (1 << bits) - 1
+    # Read only the columns this fill asks for, byte aligned for the sub byte depths
+    low, high = _ondisk_column_span(geometry, tilegrid, bitmap)
+    if high < 0:
+        return True  # nothing in the bitmap is on screen
+    byte_lo = low * bits // 8
+    span = (high * bits) // 8 + 1 - byte_lo
     # The rows are stored bottom up, so the last one in the file is the top of the image
     cached_row = -1
     row_data = b""
@@ -288,14 +338,16 @@ def _fill_pixels_ondisk(
             if tile_x < width and tile_y < height:
                 file_row = height - tile_y - 1
                 if file_row != cached_row:
-                    file.seek(data_offset + file_row * file_stride)
-                    row_data = file.read(file_stride)
+                    row_data = _ondisk_read_row(
+                        file, data_offset + file_row * file_stride + byte_lo, span
+                    )
                     cached_row = file_row
                 if bits == 8:
-                    if tile_x < len(row_data):
-                        pixel = row_data[tile_x]
+                    index = tile_x - byte_lo
+                    if index < len(row_data):
+                        pixel = row_data[index]
                 else:
-                    index = tile_x // pixels_per_byte
+                    index = tile_x // pixels_per_byte - byte_lo
                     if index < len(row_data):
                         shift = (8 - bits) - (tile_x % pixels_per_byte) * bits
                         pixel = (row_data[index] >> shift) & bitmask
@@ -363,6 +415,14 @@ def _fill_pixels_ondisk_rgb(
     # A 565 file already holds the colour the display wants. The other layouts are
     # the same channels in other places, so each one is a rearrangement of the bits.
     is_565 = bits == 16 and bitmap._g_bitmask == 0x07E0
+    # Read only the columns this fill asks for, so a clipped draw of a wide picture
+    # does not pull in the whole row
+    low, high = _ondisk_column_span(geometry, tilegrid, bitmap)
+    if high < 0:
+        return True  # nothing in the bitmap is on screen
+    bytes_per_pixel = bits // 8
+    byte_lo = low * bytes_per_pixel
+    span = (high + 1) * bytes_per_pixel - byte_lo
     cached_row = -1
     row_data = b""
 
@@ -387,11 +447,12 @@ def _fill_pixels_ondisk_rgb(
             if tile_x < width and tile_y < height:
                 file_row = height - tile_y - 1
                 if file_row != cached_row:
-                    file.seek(data_offset + file_row * file_stride)
-                    row_data = file.read(file_stride)
+                    row_data = _ondisk_read_row(
+                        file, data_offset + file_row * file_stride + byte_lo, span
+                    )
                     cached_row = file_row
                 if bits == 16:
-                    index = tile_x * 2
+                    index = tile_x * 2 - byte_lo
                     if index + 1 < len(row_data):
                         value = row_data[index] | row_data[index + 1] << 8
                         if is_565:
@@ -403,7 +464,7 @@ def _fill_pixels_ondisk_rgb(
                                 | (value & 0x1F)
                             )
                 else:
-                    index = tile_x * 3
+                    index = tile_x * 3 - byte_lo
                     if index + 2 < len(row_data):
                         color = (
                             (row_data[index + 2] >> 3) << 11
@@ -837,8 +898,10 @@ class TileGrid:
         ) * (end_y - start_y) >= min(
             len(self._pixel_shader), 1 << bitmap._bits_per_pixel
         ):
+            # One entry per palette colour, not one per value the file can hold, so a
+            # malformed file whose index is past the palette raises as it did before
             colors, opaque = _palette_table(
-                self._pixel_shader, colorspace, 1 << bitmap._bits_per_pixel
+                self._pixel_shader, colorspace, len(self._pixel_shader)
             )
             geometry = (start, x_stride, y_stride, x_shift, y_shift)
             geometry += (start_x, end_x, start_y, end_y)
