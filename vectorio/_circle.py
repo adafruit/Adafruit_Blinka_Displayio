@@ -21,7 +21,7 @@ from typing import Union
 from displayio._colorconverter import ColorConverter
 from displayio._palette import Palette
 from displayio._area import Area
-from ._vectorshape import _VectorShape
+from ._vectorshape import _VectorShape, _COVER_CIRCLE
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -29,6 +29,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 class Circle(_VectorShape):
     """Vectorio Circle"""
+
+    # How TileGrid's sibling loop in _vectorshape tests coverage
+    _cover_kind = _COVER_CIRCLE
 
     def __init__(
         self,

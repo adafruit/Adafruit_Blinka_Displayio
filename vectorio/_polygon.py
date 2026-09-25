@@ -21,7 +21,7 @@ from typing import Union, Tuple, List
 from displayio._colorconverter import ColorConverter
 from displayio._palette import Palette
 from displayio._area import Area
-from ._vectorshape import _VectorShape
+from ._vectorshape import _VectorShape, _COVER_ASK_SHAPE
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -29,6 +29,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 class Polygon(_VectorShape):
     """Vectorio Polygon"""
+
+    # How TileGrid's sibling loop in _vectorshape tests coverage
+    _cover_kind = _COVER_ASK_SHAPE
 
     def __init__(
         self,

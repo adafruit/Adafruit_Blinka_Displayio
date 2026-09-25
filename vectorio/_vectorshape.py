@@ -33,7 +33,8 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 # How the loop below decides whether a pixel is covered. A rectangle and a circle
 # are a couple of comparisons, so the loop does them itself rather than calling the
-# shape once per pixel. Anything else asks the shape.
+# shape once per pixel. Anything else asks the shape. Each stock shape names its own
+# kind in _cover_kind, which saves importing the three classes back into this module.
 _COVER_RECTANGLE = 0
 _COVER_CIRCLE = 1
 _COVER_ASK_SHAPE = 2
@@ -44,26 +45,22 @@ def _shape_fast_path(colorspace: Colorspace, shape, pixel_shader):
     shape, or None when the loop below does not apply: another display depth, a
     dithered or subclassed palette, a shape that is not one of the three here, or a
     color index outside the palette."""
-    # pylint: disable=protected-access, unidiomatic-typecheck, import-outside-toplevel
+    # pylint: disable=protected-access, unidiomatic-typecheck
     if colorspace.depth != 16:
         return None
     if type(pixel_shader) is not Palette or pixel_shader._dither:
         return None
-    # Imported here because each shape module imports this one
-    from ._circle import Circle
-    from ._polygon import Polygon
-    from ._rectangle import Rectangle
-
-    # Exact types, since a subclass may return something else from _get_pixel
-    kind = type(shape)
-    if kind is Rectangle:
+    # The class itself, not a parent, since a subclass may return something else
+    # from _get_pixel
+    how = type(shape).__dict__.get("_cover_kind")
+    if how == _COVER_RECTANGLE:
         # _get_pixel is 0 <= x < width and 0 <= y < height
-        cover = (_COVER_RECTANGLE, shape._width, shape._height)
-    elif kind is Circle:
+        cover = (how, shape._width, shape._height)
+    elif how == _COVER_CIRCLE:
         # _get_pixel works out to x * x + y * y <= radius * radius
-        cover = (_COVER_CIRCLE, shape._radius, shape._radius * shape._radius)
-    elif kind is Polygon:
-        cover = (_COVER_ASK_SHAPE, 0, 0)
+        cover = (how, shape._radius, shape._radius * shape._radius)
+    elif how == _COVER_ASK_SHAPE:
+        cover = (how, 0, 0)
     else:
         return None
     index = shape._color_index - 1
