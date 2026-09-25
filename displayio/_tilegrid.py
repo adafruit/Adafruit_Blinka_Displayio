@@ -223,6 +223,90 @@ def _fill_pixels_packed(buffer, mask, colors, opaque, geometry, tilegrid, bitmap
     return full_coverage
 
 
+def _can_fill_ondisk(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
+    """True for an indexed OnDiskBitmap with an undithered Palette on a 16 bit display."""
+    # pylint: disable=protected-access, unidiomatic-typecheck
+    # Exact types, since a subclass may override _get_pixel or _get_color.
+    if colorspace.depth != 16 or type(bitmap) is not OnDiskBitmap:
+        return False
+    if type(pixel_shader) is not Palette or pixel_shader._dither:
+        return False
+    return bitmap._bits_per_pixel <= 8
+
+
+def _fill_pixels_ondisk(
+    buffer, mask, colors, opaque, geometry, tilegrid, bitmap
+) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint: disable=too-many-statements, protected-access
+    """The pixel loop of TileGrid._fill_area for an indexed OnDiskBitmap with a Palette
+    on a 16 bit display. Same shape as _fill_pixels, but the values come from the file
+    a row at a time, since the rows are read in order and each one holds many pixels.
+    Returns False if a transparent pixel was left unset."""
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    file = bitmap._file
+    data_offset = bitmap._data_offset
+    file_stride = bitmap._stride
+    width = bitmap._width
+    height = bitmap._height
+    bits = bitmap._bits_per_pixel
+    pixels_per_byte = 8 // bits
+    bitmask = (1 << bits) - 1
+    # The rows are stored bottom up, so the last one in the file is the top of the image
+    cached_row = -1
+    row_data = b""
+
+    full_coverage = True
+    for y in range(start_y, end_y):
+        row_start = start + (y - start_y + y_shift) * y_stride
+        local_y = y // scale
+        for x in range(start_x, end_x):
+            offset = row_start + (x - start_x + x_shift) * x_stride
+            if mask[offset >> 5] & (1 << (offset & 31)):
+                continue
+            local_x = x // scale
+            tile = tiles[
+                ((local_y // tile_height + top_left_y) % height_in_tiles)
+                * width_in_tiles
+                + (local_x // tile_width + top_left_x) % width_in_tiles
+            ]
+            tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+            tile_y = (
+                tile // bitmap_width_in_tiles
+            ) * tile_height + local_y % tile_height
+            pixel = 0
+            if tile_x < width and tile_y < height:
+                file_row = height - tile_y - 1
+                if file_row != cached_row:
+                    file.seek(data_offset + file_row * file_stride)
+                    row_data = file.read(file_stride)
+                    cached_row = file_row
+                if bits == 8:
+                    if tile_x < len(row_data):
+                        pixel = row_data[tile_x]
+                else:
+                    index = tile_x // pixels_per_byte
+                    if index < len(row_data):
+                        shift = (8 - bits) - (tile_x % pixels_per_byte) * bits
+                        pixel = (row_data[index] >> shift) & bitmask
+            if opaque[pixel]:
+                mask[offset >> 5] |= 1 << (offset & 31)
+                buffer[offset] = colors[pixel]
+            else:
+                full_coverage = False
+    return full_coverage
+
+
 # Input colorspaces the loop below converts inline, as (byte swap first, formula).
 # The formulas are ColorConverter._convert_pixel followed by _compute_rgb565, worked
 # through: every one is a rearrangement of the input bits.
@@ -633,6 +717,22 @@ class TileGrid:
             geometry = (start, x_stride, y_stride, x_shift, y_shift)
             geometry += (start_x, end_x, start_y, end_y)
             covered = _fill_pixels(
+                buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
+            )
+            return full_coverage and covered
+
+        # An indexed OnDiskBitmap is palette values too, read from the file instead.
+        if _can_fill_ondisk(colorspace, bitmap, self._pixel_shader) and (
+            end_x - start_x
+        ) * (end_y - start_y) >= min(
+            len(self._pixel_shader), 1 << bitmap._bits_per_pixel
+        ):
+            colors, opaque = _palette_table(
+                self._pixel_shader, colorspace, 1 << bitmap._bits_per_pixel
+            )
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
+            covered = _fill_pixels_ondisk(
                 buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
             )
             return full_coverage and covered
