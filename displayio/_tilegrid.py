@@ -236,27 +236,54 @@ def _can_fill_ondisk(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
 
 def _ondisk_column_span(geometry, tilegrid, bitmap):
     """The lowest and highest source column this fill will ask for, so a row read
-    covers only those and a clipped draw does not read the whole row. One pass over
-    the x range, against the pixel loop's x by y, so it costs nothing to be exact."""
+    covers only those and a clipped draw does not read the whole row.
+
+    Each row of the grid can hold a different tile, and two tiles can sit in
+    different columns of the sheet, so every visible row has to be counted. One pass
+    over x gives the offsets inside a tile that each column of the grid asks for,
+    which is the same whichever row it is on, then the rows are walked against those.
+    That is the visible tile count, not a pixel by pixel scan."""
     # pylint: disable=protected-access, too-many-locals
-    start_x, end_x = geometry[5], geometry[6]
+    start_x, end_x, start_y, end_y = geometry[5:]
     scale = tilegrid._absolute_transform.scale
     tiles = tilegrid._tiles
     tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
     top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
     width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
     bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
     width = bitmap._width
-    low = width
-    high = -1
+
+    offsets = {}
     for x in range(start_x, end_x):
         local_x = x // scale
-        # Every row uses the same columns, so the tile row does not matter here
-        tile = tiles[(local_x // tile_width + top_left_x) % width_in_tiles]
-        tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
-        if tile_x < width:
-            low = min(low, tile_x)
-            high = max(high, tile_x)
+        column = (local_x // tile_width + top_left_x) % width_in_tiles
+        offset = local_x % tile_width
+        span = offsets.get(column)
+        if span is None:
+            offsets[column] = [offset, offset]
+        elif offset < span[0]:
+            span[0] = offset
+        elif offset > span[1]:
+            span[1] = offset
+
+    rows = set()
+    for y in range(start_y, end_y):
+        rows.add(((y // scale) // tile_height + top_left_y) % height_in_tiles)
+        if len(rows) == height_in_tiles:
+            break
+
+    low = width
+    high = -1
+    for row in rows:
+        for column, (offset_low, offset_high) in offsets.items():
+            tile = tiles[row * width_in_tiles + column]
+            base = (tile % bitmap_width_in_tiles) * tile_width
+            if base + offset_low < width:
+                low = min(low, base + offset_low)
+                high = max(high, min(base + offset_high, width - 1))
     return low, high
 
 
