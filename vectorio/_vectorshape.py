@@ -473,6 +473,10 @@ class _VectorShape:
         if not self._refresh_state_dirty:
             return
         self._refresh_state_dirty = False
+        # The position left behind has been drawn over, so nothing is owed. The union
+        # in _consume_dirty_areas reads this back, so leaving it set would carry the
+        # old position into every later frame.
+        self._ephemeral_dirty_area.x1 = self._ephemeral_dirty_area.x2
 
         if isinstance(self._pixel_shader, (Palette, ColorConverter)):
             self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
@@ -487,17 +491,17 @@ class _VectorShape:
             self._ephemeral_dirty_area.x1 = self._ephemeral_dirty_area.x2
             return False
 
-        self._refresh_current_area.union(area, self._ephemeral_dirty_area)
-        area.copy_into(self._refresh_current_area)
-        while True:
-            area = self._pending_dirty_areas.popleft()
-            if area is self._dirty_area_sentinel:
-                break
-            self._refresh_current_area.union(area, self._refresh_area_swap)
-            self._refresh_area_swap.union(
+        while area is not self._dirty_area_sentinel:
+            # Only the position being left behind joins the area to clean up. Adding
+            # the new position too would make it always contain the current area, and
+            # the choice below between one combined area and two separate ones would
+            # always pick the combined one, so a shape moving further than its own
+            # size would redraw the whole box it travelled through.
+            self._refresh_current_area.union(
                 self._ephemeral_dirty_area, self._ephemeral_dirty_area
             )
             area.copy_into(self._refresh_current_area)
+            area = self._pending_dirty_areas.popleft()
         return True
 
     def _prepare_full_refresh(self) -> None:
@@ -528,8 +532,12 @@ class _VectorShape:
                 # combine areas to reduce redrawing of masked areas. If it does, this could
                 # be simplified to just return the 2 possibly overlapping areas.
                 area_swap = self._refresh_area_swap
-                ephemeral_dirty_area.compute_overlap(current_area, area_swap)
-                overlap_size = area_swap.size()
+                # compute_overlap leaves y1 and y2 alone when the x ranges miss, so
+                # the size is only meaningful when it reports an overlap
+                if ephemeral_dirty_area.compute_overlap(current_area, area_swap):
+                    overlap_size = area_swap.size()
+                else:
+                    overlap_size = 0
                 ephemeral_dirty_area.union(current_area, area_swap)
                 union_size = area_swap.size()
                 current_size = current_area.size()
