@@ -223,6 +223,288 @@ def _fill_pixels_packed(buffer, mask, colors, opaque, geometry, tilegrid, bitmap
     return full_coverage
 
 
+def _can_fill_ondisk(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
+    """True for an indexed OnDiskBitmap with an undithered Palette on a 16 bit display."""
+    # pylint: disable=protected-access, unidiomatic-typecheck
+    # Exact types, since a subclass may override _get_pixel or _get_color.
+    if colorspace.depth != 16 or type(bitmap) is not OnDiskBitmap:
+        return False
+    if type(pixel_shader) is not Palette or pixel_shader._dither:
+        return False
+    return bitmap._bits_per_pixel <= 8
+
+
+def _ondisk_column_span(geometry, tilegrid, bitmap):
+    """The lowest and highest source column this fill will ask for, so a row read
+    covers only those and a clipped draw does not read the whole row.
+
+    Each row of the grid can hold a different tile, and two tiles can sit in
+    different columns of the sheet, so every visible row has to be counted. One pass
+    over x gives the offsets inside a tile that each column of the grid asks for,
+    which is the same whichever row it is on, then the rows are walked against those.
+    That is the visible tile count, not a pixel by pixel scan."""
+    # pylint: disable=protected-access, too-many-locals
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    width = bitmap._width
+
+    offsets = {}
+    for x in range(start_x, end_x):
+        local_x = x // scale
+        column = (local_x // tile_width + top_left_x) % width_in_tiles
+        offset = local_x % tile_width
+        span = offsets.get(column)
+        if span is None:
+            offsets[column] = [offset, offset]
+        elif offset < span[0]:
+            span[0] = offset
+        elif offset > span[1]:
+            span[1] = offset
+
+    rows = set()
+    for y in range(start_y, end_y):
+        rows.add(((y // scale) // tile_height + top_left_y) % height_in_tiles)
+        if len(rows) == height_in_tiles:
+            break
+
+    low = width
+    high = -1
+    for row in rows:
+        for column, (offset_low, offset_high) in offsets.items():
+            tile = tiles[row * width_in_tiles + column]
+            base = (tile % bitmap_width_in_tiles) * tile_width
+            if base + offset_low < width:
+                low = min(low, base + offset_low)
+                high = max(high, min(base + offset_high, width - 1))
+    return low, high
+
+
+def _ondisk_read_row(file, offset, length):
+    """Read exactly length bytes. A stream may return fewer than asked for without
+    being at the end, so keep reading until it is full or the stream stops giving."""
+    file.seek(offset)
+    data = file.read(length)
+    if len(data) < length:
+        chunks = [data]
+        got = len(data)
+        while got < length:
+            more = file.read(length - got)
+            if not more:
+                break
+            chunks.append(more)
+            got += len(more)
+        data = b"".join(chunks)
+    return data
+
+
+def _fill_pixels_ondisk(
+    buffer, mask, colors, opaque, geometry, tilegrid, bitmap
+) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint: disable=too-many-statements, protected-access
+    """The pixel loop of TileGrid._fill_area for an indexed OnDiskBitmap with a Palette
+    on a 16 bit display. Same shape as _fill_pixels, but the values come from the file
+    a row at a time, since the rows are read in order and each one holds many pixels.
+    Returns False if a transparent pixel was left unset."""
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    file = bitmap._file
+    data_offset = bitmap._data_offset
+    file_stride = bitmap._stride
+    width = bitmap._width
+    height = bitmap._height
+    bits = bitmap._bits_per_pixel
+    pixels_per_byte = 8 // bits
+    bitmask = (1 << bits) - 1
+    # Read only the columns this fill asks for, byte aligned for the sub byte depths
+    low, high = _ondisk_column_span(geometry, tilegrid, bitmap)
+    if high < 0:
+        return True  # nothing in the bitmap is on screen
+    byte_lo = low * bits // 8
+    span = (high * bits) // 8 + 1 - byte_lo
+    # The rows are stored bottom up, so the last one in the file is the top of the image
+    cached_row = -1
+    row_data = b""
+
+    full_coverage = True
+    for y in range(start_y, end_y):
+        row_start = start + (y - start_y + y_shift) * y_stride
+        local_y = y // scale
+        for x in range(start_x, end_x):
+            offset = row_start + (x - start_x + x_shift) * x_stride
+            if mask[offset >> 5] & (1 << (offset & 31)):
+                continue
+            local_x = x // scale
+            tile = tiles[
+                ((local_y // tile_height + top_left_y) % height_in_tiles)
+                * width_in_tiles
+                + (local_x // tile_width + top_left_x) % width_in_tiles
+            ]
+            tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+            tile_y = (
+                tile // bitmap_width_in_tiles
+            ) * tile_height + local_y % tile_height
+            pixel = 0
+            if tile_x < width and tile_y < height:
+                file_row = height - tile_y - 1
+                if file_row != cached_row:
+                    row_data = _ondisk_read_row(
+                        file, data_offset + file_row * file_stride + byte_lo, span
+                    )
+                    cached_row = file_row
+                if bits == 8:
+                    index = tile_x - byte_lo
+                    if index < len(row_data):
+                        pixel = row_data[index]
+                else:
+                    index = tile_x // pixels_per_byte - byte_lo
+                    if index < len(row_data):
+                        shift = (8 - bits) - (tile_x % pixels_per_byte) * bits
+                        pixel = (row_data[index] >> shift) & bitmask
+            if opaque[pixel]:
+                mask[offset >> 5] |= 1 << (offset & 31)
+                buffer[offset] = colors[pixel]
+            else:
+                full_coverage = False
+    return full_coverage
+
+
+def _can_convert_ondisk(colorspace: Colorspace, bitmap, pixel_shader) -> bool:
+    """True for a 16 or 24 bit OnDiskBitmap with a fully opaque undithered ColorConverter
+    on a 16 bit display. A 32 bit file is left out: its top byte reaches the red channel
+    of a conversion that shifts without masking it, so the colour comes out beyond 16
+    bits. Those keep the existing loop and its result."""
+    # pylint: disable=protected-access, unidiomatic-typecheck, too-many-return-statements
+    # Exact types, since a subclass may override _get_pixel or _convert.
+    if colorspace.depth != 16 or type(bitmap) is not OnDiskBitmap:
+        return False
+    if type(pixel_shader) is not ColorConverter or pixel_shader._dither:
+        return False
+    if pixel_shader._transparent_color is not None:
+        return False
+    if pixel_shader._input_colorspace != Colorspace.RGB888:
+        return False
+    if bitmap._bits_per_pixel == 24:
+        return True
+    if bitmap._bits_per_pixel != 16:
+        return False
+    # Only the two standard channel layouts, so each channel stays inside its field
+    return (bitmap._r_bitmask, bitmap._g_bitmask, bitmap._b_bitmask) in (
+        (0xF800, 0x07E0, 0x001F),
+        (0x7C00, 0x03E0, 0x001F),
+    )
+
+
+def _fill_pixels_ondisk_rgb(
+    buffer, mask, reverse_output, geometry, tilegrid, bitmap
+) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint: disable=too-many-statements, too-many-nested-blocks, protected-access
+    """The pixel loop of TileGrid._fill_area for a 16 or 24 bit OnDiskBitmap with a
+    ColorConverter on a 16 bit display, where the colours are too many for a table.
+    Same row reads as _fill_pixels_ondisk, but the colour is computed from the file
+    bytes inline instead of one _get_pixel and one converter call per pixel. Every
+    pixel is opaque, so this always covers its area."""
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    scale = tilegrid._absolute_transform.scale
+    tiles = tilegrid._tiles
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    top_left_x = tilegrid._top_left_x
+    top_left_y = tilegrid._top_left_y
+    width_in_tiles = tilegrid._width_in_tiles
+    height_in_tiles = tilegrid._height_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    file = bitmap._file
+    data_offset = bitmap._data_offset
+    file_stride = bitmap._stride
+    width = bitmap._width
+    height = bitmap._height
+    bits = bitmap._bits_per_pixel
+    # A 565 file already holds the colour the display wants. The other layouts are
+    # the same channels in other places, so each one is a rearrangement of the bits.
+    is_565 = bits == 16 and bitmap._g_bitmask == 0x07E0
+    # Read only the columns this fill asks for, so a clipped draw of a wide picture
+    # does not pull in the whole row
+    low, high = _ondisk_column_span(geometry, tilegrid, bitmap)
+    if high < 0:
+        return True  # nothing in the bitmap is on screen
+    bytes_per_pixel = bits // 8
+    byte_lo = low * bytes_per_pixel
+    span = (high + 1) * bytes_per_pixel - byte_lo
+    cached_row = -1
+    row_data = b""
+
+    for y in range(start_y, end_y):
+        row_start = start + (y - start_y + y_shift) * y_stride
+        local_y = y // scale
+        for x in range(start_x, end_x):
+            offset = row_start + (x - start_x + x_shift) * x_stride
+            if mask[offset >> 5] & (1 << (offset & 31)):
+                continue
+            local_x = x // scale
+            tile = tiles[
+                ((local_y // tile_height + top_left_y) % height_in_tiles)
+                * width_in_tiles
+                + (local_x // tile_width + top_left_x) % width_in_tiles
+            ]
+            tile_x = (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width
+            tile_y = (
+                tile // bitmap_width_in_tiles
+            ) * tile_height + local_y % tile_height
+            color = 0
+            if tile_x < width and tile_y < height:
+                file_row = height - tile_y - 1
+                if file_row != cached_row:
+                    row_data = _ondisk_read_row(
+                        file, data_offset + file_row * file_stride + byte_lo, span
+                    )
+                    cached_row = file_row
+                if bits == 16:
+                    index = tile_x * 2 - byte_lo
+                    if index + 1 < len(row_data):
+                        value = row_data[index] | row_data[index + 1] << 8
+                        if is_565:
+                            color = value
+                        else:  # 555, one bit narrower in red and green
+                            color = (
+                                ((value & 0x7C00) >> 10) << 11
+                                | ((value & 0x03E0) >> 4) << 5
+                                | (value & 0x1F)
+                            )
+                else:
+                    index = tile_x * 3 - byte_lo
+                    if index + 2 < len(row_data):
+                        color = (
+                            (row_data[index + 2] >> 3) << 11
+                            | (row_data[index + 1] >> 2) << 5
+                            | (row_data[index] >> 3)
+                        )
+            if reverse_output:
+                color = ((color << 8) | (color >> 8)) & 0xFFFF
+            mask[offset >> 5] |= 1 << (offset & 31)
+            buffer[offset] = color
+    return True
+
+
 # Input colorspaces the loop below converts inline, as (byte swap first, formula).
 # The formulas are ColorConverter._convert_pixel followed by _compute_rgb565, worked
 # through: every one is a rearrangement of the input bits.
@@ -634,6 +916,38 @@ class TileGrid:
             geometry += (start_x, end_x, start_y, end_y)
             covered = _fill_pixels(
                 buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
+            )
+            return full_coverage and covered
+
+        # An indexed OnDiskBitmap is palette values too, read from the file instead.
+        if _can_fill_ondisk(colorspace, bitmap, self._pixel_shader) and (
+            end_x - start_x
+        ) * (end_y - start_y) >= min(
+            len(self._pixel_shader), 1 << bitmap._bits_per_pixel
+        ):
+            # One entry per palette colour, not one per value the file can hold, so a
+            # malformed file whose index is past the palette raises as it did before
+            colors, opaque = _palette_table(
+                self._pixel_shader, colorspace, len(self._pixel_shader)
+            )
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
+            covered = _fill_pixels_ondisk(
+                buffer.cast("B").cast("H"), mask, colors, opaque, geometry, self, bitmap
+            )
+            return full_coverage and covered
+
+        # A 16 or 24 bit OnDiskBitmap holds colours, so the loop converts them inline.
+        if _can_convert_ondisk(colorspace, bitmap, self._pixel_shader):
+            geometry = (start, x_stride, y_stride, x_shift, y_shift)
+            geometry += (start_x, end_x, start_y, end_y)
+            covered = _fill_pixels_ondisk_rgb(
+                buffer.cast("B").cast("H"),
+                mask,
+                colorspace.reverse_bytes_in_word,
+                geometry,
+                self,
+                bitmap,
             )
             return full_coverage and covered
 
