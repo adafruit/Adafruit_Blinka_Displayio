@@ -133,7 +133,6 @@ def draw_polygon(
     for i in range(len(xs) - 1):
         cur_point = (xs[i], ys[i])
         next_point = (xs[i + 1], ys[i + 1])
-        print(f"cur: {cur_point}, next: {next_point}")
         draw_line(
             dest_bitmap=dest_bitmap,
             x1=cur_point[0],
@@ -144,7 +143,6 @@ def draw_polygon(
         )
 
     if close:
-        print(f"close: {(xs[0], ys[0])} - {(xs[-1], ys[-1])}")
         draw_line(
             dest_bitmap=dest_bitmap,
             x1=xs[0],
@@ -685,7 +683,6 @@ def alphablend(
                 else:
                     pixel = dest[x, y]
 
-                print(f"pixel hex: {hex(pixel)}")
                 dest[x, y] = pixel
 
 
@@ -753,8 +750,6 @@ def dither(dest_bitmap, source_bitmap, colorspace, algorithm=DitherAlgorithm.Atk
 
     if swap_rb:
         swap |= SWAP_RB
-
-    print(f"swap: {swap}")
 
     # Create row data arrays (3 rows with padding on both sides)
     rowdata = [[0] * (width + 2 * mx) for _ in range(3)]
