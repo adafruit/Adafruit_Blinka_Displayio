@@ -18,6 +18,7 @@ displayio for Blinka
 """
 
 from __future__ import annotations
+from collections import deque
 from typing import Union, Callable
 from circuitpython_typing import WriteableBuffer
 from vectorio._rectangle import _VectorShape
@@ -58,6 +59,10 @@ class Group:
         self._supported_types = (TileGrid, Group, _VectorShape)
         self._in_group = False
         self._item_removed = False
+        self._dirty_area = Area(0, 0, 0, 0)
+        # deque append, popleft and copying are thread-safe in CPython, so a layer
+        # removed while the background thread refreshes is erased by the next refresh
+        self._removed_areas = deque()
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
         self._set_scale(scale)  # Set the scale via the setter
 
@@ -89,10 +94,54 @@ class Group:
             for layer in self._layers:
                 layer._update_transform(self._absolute_transform)
 
-    def _removal_cleanup(self, index):
+    def _removal_cleanup(self, layer):
         # pylint: disable=protected-access
-        layer = self._layers[index]
+        # Queue the area the layer was last drawn in, so a refresh draws over it.
+        # The layer is already out of the list, so no refresh can draw it again.
+        layer_area = Area()
+        if layer._get_previous_area(layer_area):
+            self._removed_areas.append(layer_area)
+            if len(self._removed_areas) > 8:
+                # A group that is not being refreshed never drains its queue, so
+                # merge it. Areas the refresh takes meanwhile are drawn by it.
+                merged = Area(0, 0, 0, 0)
+                self._pop_removed_areas_into(merged)
+                self._removed_areas.append(merged)
+        if isinstance(layer, Group):
+            # A refresh will not finish this group now, so drop what it owes
+            layer._item_removed = False
+            layer._removed_areas.clear()
         layer._update_transform(None)
+
+    def _pop_removed_areas_into(self, area: Area) -> None:
+        """Union every queued removed area into area, emptying the queue."""
+        while True:
+            try:
+                removed = self._removed_areas.popleft()
+            except IndexError:
+                return
+            area.union(removed, area)
+
+    def _consume_removed_areas(self) -> None:
+        """Fold the queued areas of removed layers into the refresh-owned area."""
+        if not self._item_removed:
+            self._dirty_area.x2 = self._dirty_area.x1
+        self._pop_removed_areas_into(self._dirty_area)
+        self._item_removed = not self._dirty_area.empty()
+
+    def _get_previous_area(self, area: Area) -> bool:
+        """Copy the area last drawn into area. Returns False if nothing was drawn."""
+        # pylint: disable=protected-access
+        area.x2 = area.x1
+        layer_area = Area()
+        for layer in self._layers:
+            if layer._get_previous_area(layer_area):
+                area.union(layer_area, area)
+        for removed_area in list(self._removed_areas):
+            area.union(removed_area, area)
+        if self._item_removed:
+            area.union(self._dirty_area, area)
+        return not area.empty()
 
     def _layer_update(self, index):
         # pylint: disable=protected-access
@@ -123,14 +172,15 @@ class Group:
 
     def pop(self, index: int = -1) -> Union[Group, TileGrid, _VectorShape]:
         """Remove the ith item and return it."""
-        self._removal_cleanup(index)
-        return self._layers.pop(index)
+        layer = self._layers.pop(index)
+        self._removal_cleanup(layer)
+        return layer
 
     def remove(self, layer: Union[Group, TileGrid, _VectorShape]) -> None:
         """Remove the first copy of layer. Raises ValueError
         if it is not present."""
-        index = self.index(layer)
-        self._layers.pop(index)
+        self._layers.pop(self.index(layer))
+        self._removal_cleanup(layer)
 
     def __bool__(self) -> bool:
         """Returns if there are any layers"""
@@ -148,13 +198,22 @@ class Group:
         self, index: int, value: Union[Group, TileGrid, _VectorShape]
     ) -> None:
         """Sets the value at the given index."""
-        self._removal_cleanup(index)
+        # pylint: disable=protected-access
+        if not isinstance(value, self._supported_types):
+            raise ValueError("Invalid Group Member")
+        if isinstance(value, (Group, TileGrid)) and value._in_group:
+            raise ValueError("Layer already in a group.")
+        old = self._layers[index]
         self._layers[index] = value
+        self._removal_cleanup(old)
         self._layer_update(index)
 
     def __delitem__(self, index: int) -> None:
         """Deletes the value at the given index."""
+        removed = self._layers[index]
         del self._layers[index]
+        for layer in removed if isinstance(index, slice) else (removed,):
+            self._removal_cleanup(layer)
 
     def _fill_area(
         self,
@@ -177,19 +236,23 @@ class Group:
         self._layers.sort(key=key, reverse=reverse)
 
     def _finish_refresh(self):
+        self._item_removed = False
         for layer in reversed(self._layers):
             if isinstance(layer, (Group, TileGrid, _VectorShape)):
                 layer._finish_refresh()  # pylint: disable=protected-access
 
     def _prepare_full_refresh(self):
+        # A full refresh draws everything, so nothing removed is owed
+        self._removed_areas.clear()
         for layer in reversed(self._layers):
-            if isinstance(layer, Group):
-                layer._prepare_full_refresh()  # pylint: disable=protected-access
-            elif isinstance(layer, _VectorShape):
+            if isinstance(layer, (Group, TileGrid, _VectorShape)):
                 layer._prepare_full_refresh()  # pylint: disable=protected-access
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         # pylint: disable=protected-access
+        self._consume_removed_areas()
+        if self._item_removed:
+            areas.append(self._dirty_area)
         for layer in reversed(self._layers):
             if isinstance(layer, (Group, _VectorShape)):
                 layer._get_refresh_areas(areas)
