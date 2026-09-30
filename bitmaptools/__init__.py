@@ -209,6 +209,38 @@ def blit(
     x2 = min(x2, source_bitmap.width)
     y2 = min(y2, source_bitmap.height)
 
+    # A subclass may override __getitem__ or __setitem__, so it takes the loop at the end
+    if (
+        type(dest_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
+        and type(source_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
+    ):
+        # Clip the destination to the bitmap and mark it dirty once
+        dx1 = max(x, 0)
+        dy1 = max(y, 0)
+        dx2 = min(x + x2 - x1, dest_bitmap.width)
+        dy2 = min(y + y2 - y1, dest_bitmap.height)
+        if dx1 >= dx2 or dy1 >= dy2:
+            return
+        ox = x1 - x
+        oy = y1 - y
+        # Negative source coordinates are an error, as in __getitem__
+        if dx1 + ox < 0 or dy1 + oy < 0:
+            raise ValueError(f"Index {(dx1 + ox, dy1 + oy)} is out of range")
+        dest_bitmap.dirty(dx1, dy1, dx2, dy2)
+        get_source = source_bitmap._get_pixel  # pylint: disable=protected-access
+        get_dest = dest_bitmap._get_pixel  # pylint: disable=protected-access
+        write_dest = dest_bitmap._write_pixel  # pylint: disable=protected-access
+        for dy in range(dy1, dy2):
+            sy = dy + oy
+            for dx in range(dx1, dx2):
+                value = get_source(dx + ox, sy)
+                if skip_source_index is not None and value == skip_source_index:
+                    continue
+                if skip_dest_index is not None and get_dest(dx, dy) == skip_dest_index:
+                    continue
+                write_dest(dx, dy, value)
+        return
+
     for y_count in range(y2 - y1):
         for x_count in range(x2 - x1):
             x_placement = x + x_count
