@@ -50,6 +50,8 @@ class Bitmap:
     `bitmaptools.arrayblit` can also be useful to move data efficiently
     into a Bitmap."""
 
+    # pylint: disable=too-many-instance-attributes
+
     def __init__(self, width: int, height: int, value_count: int):
         """Create a Bitmap object with the given fixed size. Each pixel stores a value that is
         used to index into a corresponding palette. This enables differently colored sprites to
@@ -113,6 +115,8 @@ class Bitmap:
 
         self._x_mask = (1 << self._x_shift) - 1  # Used as a modulus on the x value
         self._bitmask = (1 << bits_per_value) - 1
+        # Values with these bits set raise at 8+ bits; smaller depths mask
+        self._value_reject = ~self._bitmask if bits_per_value >= 8 else 0
         self._dirty_area = Area(0, 0, width, height)
 
     def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
@@ -158,6 +162,8 @@ class Bitmap:
         """
         if self._read_only:
             raise RuntimeError("Read-only object")
+        if value & self._value_reject:
+            raise ValueError(f"value must be 0-{self._bitmask}")
         if isinstance(index, (tuple, list)):
             x = index[0]
             y = index[1]
@@ -192,6 +198,7 @@ class Bitmap:
             self._data[index] = word
         else:
             row = memoryview(self._data)[row_start : row_start + self._stride]
+            value &= self._bitmask
             if bytes_per_value == 1:
                 struct.pack_into("<B", row, x, value)
             elif bytes_per_value == 2:
