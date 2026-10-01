@@ -18,7 +18,7 @@ displayio for Blinka
 """
 
 from __future__ import annotations
-from collections import deque
+from threading import RLock
 from typing import Union, Callable
 from circuitpython_typing import WriteableBuffer
 from vectorio._rectangle import _VectorShape
@@ -29,6 +29,10 @@ from ._area import Area
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+# Held while removed areas move between a group's queue, its dirty area and its
+# parent, so the background refresh and the app never see an area in neither place
+_removed_lock = RLock()
 
 
 class Group:
@@ -60,9 +64,7 @@ class Group:
         self._in_group = False
         self._item_removed = False
         self._dirty_area = Area(0, 0, 0, 0)
-        # deque append, popleft and copying are thread-safe in CPython, so a layer
-        # removed while the background thread refreshes is erased by the next refresh
-        self._removed_areas = deque()
+        self._removed_areas = []
         self._absolute_transform = TransformStruct(0, 0, 1, 1, 1, False, False, False)
         self._set_scale(scale)  # Set the scale via the setter
 
@@ -96,6 +98,12 @@ class Group:
 
     def _removal_cleanup(self, layer):
         # pylint: disable=protected-access
+        with _removed_lock:
+            self._queue_removed(layer)
+        layer._update_transform(None)
+
+    def _queue_removed(self, layer):
+        # pylint: disable=protected-access
         # Queue the area the layer was last drawn in, so a refresh draws over it.
         # The layer is already out of the list, so no refresh can draw it again.
         layer_area = Area()
@@ -111,23 +119,19 @@ class Group:
             # A refresh will not finish this group now, so drop what it owes
             layer._item_removed = False
             layer._removed_areas.clear()
-        layer._update_transform(None)
 
     def _pop_removed_areas_into(self, area: Area) -> None:
         """Union every queued removed area into area, emptying the queue."""
-        while True:
-            try:
-                removed = self._removed_areas.popleft()
-            except IndexError:
-                return
-            area.union(removed, area)
+        while self._removed_areas:
+            area.union(self._removed_areas.pop(0), area)
 
     def _consume_removed_areas(self) -> None:
         """Fold the queued areas of removed layers into the refresh-owned area."""
-        if not self._item_removed:
-            self._dirty_area.x2 = self._dirty_area.x1
-        self._pop_removed_areas_into(self._dirty_area)
-        self._item_removed = not self._dirty_area.empty()
+        with _removed_lock:
+            if not self._item_removed:
+                self._dirty_area.x2 = self._dirty_area.x1
+            self._pop_removed_areas_into(self._dirty_area)
+            self._item_removed = not self._dirty_area.empty()
 
     def _get_previous_area(self, area: Area) -> bool:
         """Copy the area last drawn into area. Returns False if nothing was drawn."""
@@ -137,10 +141,11 @@ class Group:
         for layer in self._layers:
             if layer._get_previous_area(layer_area):
                 area.union(layer_area, area)
-        for removed_area in list(self._removed_areas):
-            area.union(removed_area, area)
-        if self._item_removed:
-            area.union(self._dirty_area, area)
+        with _removed_lock:
+            for removed_area in self._removed_areas:
+                area.union(removed_area, area)
+            if self._item_removed:
+                area.union(self._dirty_area, area)
         return not area.empty()
 
     def _layer_update(self, index):
