@@ -1233,6 +1233,25 @@ class TileGrid:
     def _get_rendered_hidden(self) -> bool:
         return self._rendered_hidden
 
+    def _prepare_full_refresh(self) -> None:
+        """A full refresh draws this TileGrid where it is now, so record that."""
+        # Only the area. The change flags stay set, because _finish_refresh must not
+        # clear a change made while this refresh is running
+        hidden = self._hidden_tilegrid or self._hidden_by_parent
+        if self._previous_area.x1 == self._previous_area.x2 and not hidden:
+            self._current_area.copy_into(self._previous_area)
+
+    def _get_previous_area(self, area: Area) -> bool:
+        """Copy the area last drawn into area. Returns False if nothing was drawn."""
+        first_draw = self._previous_area.x1 == self._previous_area.x2
+        if self._moved or first_draw:
+            # The background thread may have drawn the current area already, and
+            # _finish_refresh has not recorded it yet, so include it
+            self._previous_area.union(self._current_area, area)
+        else:
+            self._previous_area.copy_into(area)
+        return not area.empty()
+
     def _set_all_tiles(self, tile_index: int) -> None:
         """Set all tiles to the given tile index"""
         if tile_index >= self._tiles_in_bitmap:

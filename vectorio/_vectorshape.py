@@ -249,6 +249,11 @@ class _VectorShape:
         self._ephemeral_dirty_area.union(self._current_area, out_area)
         return True  # For now just always redraw.
 
+    def _get_previous_area(self, area: Area) -> bool:
+        """Copy the area last drawn into area. Returns False if nothing was drawn."""
+        self._ephemeral_dirty_area.union(self._refresh_current_area, area)
+        return not area.empty()
+
     def _get_screen_area(self, out_area) -> Area:
         self._get_area(out_area)
         if self._absolute_transform.transpose_xy:
