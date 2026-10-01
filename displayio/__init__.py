@@ -44,9 +44,8 @@ def _background(stop_event):
         for display in displays:
             display._background()  # pylint: disable=protected-access
 
-        # relax system when _background does nothing
-        # and we are in a while True loop consuming lots of CPU
-        time.sleep(0.0)
+        # Yield ~1 ms between checks, like CircuitPython's background tick
+        time.sleep(0.001)
 
 
 def release_displays() -> None:
