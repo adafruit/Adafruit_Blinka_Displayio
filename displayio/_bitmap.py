@@ -18,6 +18,7 @@ displayio for Blinka
 """
 
 from __future__ import annotations
+import operator
 import struct
 from array import array
 from typing import Union, Tuple
@@ -162,6 +163,8 @@ class Bitmap:
         """
         if self._read_only:
             raise RuntimeError("Read-only object")
+        if type(value) is not int:  # pylint: disable=unidiomatic-typecheck
+            value = operator.index(value)  # NumPy and other integer-like values
         if value & self._value_reject:
             raise ValueError(f"value must be 0-{self._bitmask}")
         if isinstance(index, (tuple, list)):

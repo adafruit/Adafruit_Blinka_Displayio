@@ -6,6 +6,7 @@ Collection of bitmap manipulation tools
 """
 
 import math
+import operator
 import struct
 from collections import deque
 from typing import Optional, Tuple, BinaryIO
@@ -26,6 +27,8 @@ def fill_region(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: 
     :param int value: Bitmap palette index that will be written into the rectangular
            fill region in the destination bitmap"""
 
+    if type(value) is not int:  # pylint: disable=unidiomatic-typecheck
+        value = operator.index(value)  # NumPy and other integer-like values
     if value & dest_bitmap._value_reject:  # pylint: disable=protected-access
         raise ValueError("out of range of target")
 
