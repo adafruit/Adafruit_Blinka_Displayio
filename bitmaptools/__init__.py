@@ -209,6 +209,10 @@ def blit(
     x2 = min(x2, source_bitmap.width)
     y2 = min(y2, source_bitmap.height)
 
+    # Copy from the far edge so a bitmap blitted into itself is read before it is overwritten
+    x_reverse = x > x1
+    y_reverse = y > y1
+
     # A subclass may override __getitem__ or __setitem__, so it takes the loop at the end
     if (
         type(dest_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
@@ -230,9 +234,11 @@ def blit(
         get_source = source_bitmap._get_pixel  # pylint: disable=protected-access
         get_dest = dest_bitmap._get_pixel  # pylint: disable=protected-access
         write_dest = dest_bitmap._write_pixel  # pylint: disable=protected-access
-        for dy in range(dy1, dy2):
+        rows = range(dy1, dy2)[::-1] if y_reverse else range(dy1, dy2)
+        cols = range(dx1, dx2)[::-1] if x_reverse else range(dx1, dx2)
+        for dy in rows:
             sy = dy + oy
-            for dx in range(dx1, dx2):
+            for dx in cols:
                 value = get_source(dx + ox, sy)
                 if skip_source_index is not None and value == skip_source_index:
                     continue
@@ -241,8 +247,10 @@ def blit(
                 write_dest(dx, dy, value)
         return
 
-    for y_count in range(y2 - y1):
-        for x_count in range(x2 - x1):
+    y_counts = range(y2 - y1)[::-1] if y_reverse else range(y2 - y1)
+    x_counts = range(x2 - x1)[::-1] if x_reverse else range(x2 - x1)
+    for y_count in y_counts:
+        for x_count in x_counts:
             x_placement = x + x_count
             y_placement = y + y_count
 
