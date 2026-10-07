@@ -405,8 +405,12 @@ def rotozoom(
     rowv = startv + miny * dv_col
 
     # An exact Bitmap is marked dirty once and written directly, which truncates a
-    # value too big for it; a subclass may override __setitem__, so it keeps that
-    if type(dest_bitmap) is Bitmap:  # pylint: disable=unidiomatic-typecheck
+    # value too big for it; a subclass may override __setitem__ or return integer-like
+    # values from __getitem__, so it keeps the setter
+    if (
+        type(dest_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
+        and type(source_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
+    ):
         # Clamp to the bitmap, as C clamps the clip region, so the area is never backwards
         dx1, dy1 = max(minx, 0), max(miny, 0)
         dx2, dy2 = min(maxx + 1, dest_bitmap.width), min(maxy + 1, dest_bitmap.height)
