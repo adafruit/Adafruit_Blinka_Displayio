@@ -174,9 +174,13 @@ class Bitmap:
         elif isinstance(index, int):
             x = index % self._bmp_width
             y = index // self._bmp_width
-        # update the dirty region
-        self._set_dirty_area(Area(x, y, x + 1, y + 1))
+        # Write first, so a background refresh that clears the dirty region
+        # before the check below gets the pixel marked again
         self._write_pixel(x, y, value)
+        # update the dirty region, unless the pixel is already inside it
+        dirty = self._dirty_area
+        if not (dirty.x1 <= x < dirty.x2 and dirty.y1 <= y < dirty.y2):
+            self._set_dirty_area(Area(x, y, x + 1, y + 1))
 
     def _write_pixel(self, x: int, y: int, value: int) -> None:
         if self._read_only:
