@@ -33,11 +33,13 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 # How the loop below decides whether a pixel is covered. A rectangle and a circle
 # are a couple of comparisons, so the loop does them itself rather than calling the
-# shape once per pixel. Anything else asks the shape. Each stock shape names its own
-# kind in _cover_kind, which saves importing the three classes back into this module.
+# shape once per pixel. A polygon works out every pixel of the area at once, a row at
+# a time. Anything else asks the shape. Each stock shape names its own kind in
+# _cover_kind, which saves importing the three classes back into this module.
 _COVER_RECTANGLE = 0
 _COVER_CIRCLE = 1
 _COVER_ASK_SHAPE = 2
+_COVER_SPANS = 3
 
 
 def _shape_fast_path(colorspace: Colorspace, shape, pixel_shader):
@@ -59,7 +61,7 @@ def _shape_fast_path(colorspace: Colorspace, shape, pixel_shader):
     elif how == _COVER_CIRCLE:
         # _get_pixel works out to x * x + y * y <= radius * radius
         cover = (how, shape._radius, shape._radius * shape._radius)
-    elif how == _COVER_ASK_SHAPE:
+    elif how in (_COVER_ASK_SHAPE, _COVER_SPANS):
         cover = (how, 0, 0)
     else:
         return None
@@ -82,11 +84,12 @@ def _fill_shape_pixels(buffer, mask, cover, geometry, shape, transform) -> bool:
     # pylint: disable=too-many-statements, protected-access, invalid-name
     """The pixel loop of _VectorShape._fill_area for one of the stock shapes with a
     Palette on a 16 bit display. Same shape as the loop it replaces, but the color is
-    resolved once, the screen to shape transform is worked out here, and a rectangle
-    or a circle is tested with a couple of comparisons instead of a call per pixel.
-    The transform leaves one shape coordinate the same all the way along a row, so a
-    row outside the shape is skipped whole. Returns False if any pixel of the area
-    was left uncovered."""
+    resolved once, the screen to shape transform is worked out here, a rectangle or a
+    circle is tested with a couple of comparisons instead of a call per pixel, and a
+    polygon is asked once for every pixel of the area. The transform leaves one shape
+    coordinate the same all the way along a row, so a row outside a rectangle or a
+    circle is skipped whole. Returns False if any pixel of the area was left
+    uncovered."""
     color, how, cover_a, cover_b = cover
     start_px, linestride_px, x1, y1, x2, y2 = geometry
     transpose, shape_origin_x, shape_origin_y, sign_x, sign_y = transform
@@ -100,6 +103,18 @@ def _fill_shape_pixels(buffer, mask, cover, geometry, shape, transform) -> bool:
         row_origin, row_sign = shape_origin_y, sign_y
         col_origin, col_sign = shape_origin_x, sign_x
         row_len, col_len = cover_b, cover_a
+    span_rows = span_row = None
+    span_x = span_y = 0
+    if how == _COVER_SPANS:
+        # Ask the shape for every pixel of this area at once, in shape coordinates
+        rows = sorted(((y1 - row_origin) * row_sign, (y2 - 1 - row_origin) * row_sign))
+        cols = sorted(((x1 - col_origin) * col_sign, (x2 - 1 - col_origin) * col_sign))
+        if transpose:
+            rows, cols = cols, rows
+        span_x, span_y = cols[0], rows[0]
+        span_rows = shape._span_rows(span_x, span_y, cols[1] + 1, rows[1] + 1)
+        if span_rows is None:
+            how = _COVER_ASK_SHAPE
 
     full_coverage = True
     row_start_px = start_px
@@ -118,6 +133,8 @@ def _fill_shape_pixels(buffer, mask, cover, geometry, shape, transform) -> bool:
                 row_start_px += linestride_px
                 continue
             limit = cover_b - row_coord * row_coord
+        elif how == _COVER_SPANS and not transpose:
+            span_row = span_rows[row_coord - span_y]
         for x in range(x1, x2):
             pixel_index = row_start_px + (x - x1)
             if mask[pixel_index >> 5] & (1 << (pixel_index & 31)):
@@ -127,6 +144,11 @@ def _fill_shape_pixels(buffer, mask, cover, geometry, shape, transform) -> bool:
                 covered = 0 <= col_coord < limit
             elif how == _COVER_CIRCLE:
                 covered = col_coord * col_coord <= limit
+            elif how == _COVER_SPANS:
+                if transpose:
+                    covered = span_rows[col_coord - span_y][row_coord - span_x]
+                else:
+                    covered = span_row[col_coord - span_x]
             elif transpose:
                 covered = get_pixel(row_coord, col_coord) != 0
             else:

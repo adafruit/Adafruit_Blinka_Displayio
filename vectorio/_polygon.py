@@ -21,7 +21,7 @@ from typing import Union, Tuple, List
 from displayio._colorconverter import ColorConverter
 from displayio._palette import Palette
 from displayio._area import Area
-from ._vectorshape import _VectorShape, _COVER_ASK_SHAPE
+from ._vectorshape import _VectorShape, _COVER_SPANS
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
@@ -31,7 +31,7 @@ class Polygon(_VectorShape):
     """Vectorio Polygon"""
 
     # How TileGrid's sibling loop in _vectorshape tests coverage
-    _cover_kind = _COVER_ASK_SHAPE
+    _cover_kind = _COVER_SPANS
 
     def __init__(
         self,
@@ -120,6 +120,46 @@ class Polygon(_VectorShape):
             y1 = y2
 
         return 0 if winding_number == 0 else self._color_index
+
+    def _span_rows(self, x1: int, y1: int, x2: int, y2: int):
+        """_get_pixel's winding test for every pixel from x1, y1 up to x2, y2 at
+        once: rows[j][i] is 1 where the polygon winds around x1 + i, y1 + j. Each
+        edge's crossing is worked out once per row instead of once per pixel. None if
+        a point's first two items are not both ints, or there are no points."""
+        # pylint: disable=too-many-locals, invalid-name, unidiomatic-typecheck
+        points = []
+        # a copy, so points changed by another thread can't mix into one draw
+        for point in list(self._points):
+            px, py = point[0], point[1]
+            if type(px) is not int or type(py) is not int:
+                return None
+            points.append((px, py))
+        if not points:
+            return None
+        width = x2 - x1
+        rows = []
+        for y in range(y1, y2):
+            # An edge with ya <= y < yb winds up, and one with yb <= y < ya winds
+            # down, at every x left of where it crosses this row
+            crossings = []
+            xa, ya = points[-1]
+            for xb, yb in points:
+                if ya <= y < yb or yb <= y < ya:
+                    # x < xa + ceil((y - ya) * (xb - xa) / (yb - ya)), in integers
+                    limit = xa - ((ya - y) * (xb - xa)) // (yb - ya) - x1
+                    crossings.append((min(max(limit, 0), width), 1 if yb > ya else -1))
+                xa, ya = xb, yb
+            row = bytearray(width)
+            crossings.sort(reverse=True)
+            winding = 0
+            right = width
+            for limit, step in crossings:
+                if winding and limit < right:
+                    row[limit:right] = b"\x01" * (right - limit)
+                right = min(right, limit)
+                winding += step
+            rows.append(row)
+        return rows
 
     def _get_area(self, out_area: Area) -> None:
         # Figure out the shape dimensions by using min and max
