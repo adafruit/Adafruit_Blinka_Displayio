@@ -122,14 +122,14 @@ class Polygon(_VectorShape):
         return 0 if winding_number == 0 else self._color_index
 
     def _span_rows(self, x1: int, y1: int, x2: int, y2: int):
-        """_get_pixel for every pixel from x1, y1 up to x2, y2 at once: rows[j][i]
-        is 1 where _get_pixel(x1 + i, y1 + j) is not 0. Each edge's crossing is
-        worked out once per row instead of once per pixel. None if a point is not
-        a pair of ints, or there are no points."""
-        # pylint: disable=too-many-arguments, too-many-locals, invalid-name
-        # pylint: disable=unidiomatic-typecheck
+        """_get_pixel's winding test for every pixel from x1, y1 up to x2, y2 at
+        once: rows[j][i] is 1 where the polygon winds around x1 + i, y1 + j. Each
+        edge's crossing is worked out once per row instead of once per pixel. None if
+        a point's first two items are not both ints, or there are no points."""
+        # pylint: disable=too-many-locals, invalid-name, unidiomatic-typecheck
         points = []
-        for point in self._points:
+        # a copy, so points changed by another thread can't mix into one draw
+        for point in list(self._points):
             px, py = point[0], point[1]
             if type(px) is not int or type(py) is not int:
                 return None

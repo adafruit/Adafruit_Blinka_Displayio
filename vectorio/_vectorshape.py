@@ -33,8 +33,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 
 # How the loop below decides whether a pixel is covered. A rectangle and a circle
 # are a couple of comparisons, so the loop does them itself rather than calling the
-# shape once per pixel. Anything else asks the shape. Each stock shape names its own
-# kind in _cover_kind, which saves importing the three classes back into this module.
+# shape once per pixel. A polygon works out every pixel of the area at once, a row at
+# a time. Anything else asks the shape. Each stock shape names its own kind in
+# _cover_kind, which saves importing the three classes back into this module.
 _COVER_RECTANGLE = 0
 _COVER_CIRCLE = 1
 _COVER_ASK_SHAPE = 2
@@ -83,11 +84,12 @@ def _fill_shape_pixels(buffer, mask, cover, geometry, shape, transform) -> bool:
     # pylint: disable=too-many-statements, protected-access, invalid-name
     """The pixel loop of _VectorShape._fill_area for one of the stock shapes with a
     Palette on a 16 bit display. Same shape as the loop it replaces, but the color is
-    resolved once, the screen to shape transform is worked out here, and a rectangle
-    or a circle is tested with a couple of comparisons instead of a call per pixel.
-    The transform leaves one shape coordinate the same all the way along a row, so a
-    row outside the shape is skipped whole. Returns False if any pixel of the area
-    was left uncovered."""
+    resolved once, the screen to shape transform is worked out here, a rectangle or a
+    circle is tested with a couple of comparisons instead of a call per pixel, and a
+    polygon is asked once for every pixel of the area. The transform leaves one shape
+    coordinate the same all the way along a row, so a row outside a rectangle or a
+    circle is skipped whole. Returns False if any pixel of the area was left
+    uncovered."""
     color, how, cover_a, cover_b = cover
     start_px, linestride_px, x1, y1, x2, y2 = geometry
     transpose, shape_origin_x, shape_origin_y, sign_x, sign_y = transform
