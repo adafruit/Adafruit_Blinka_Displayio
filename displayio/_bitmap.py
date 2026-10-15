@@ -119,6 +119,8 @@ class Bitmap:
         # Values with these bits set raise at 8+ bits; smaller depths mask
         self._value_reject = ~self._bitmask if bits_per_value >= 8 else 0
         self._dirty_area = Area(0, 0, width, height)
+        # The dirty area a refresh has taken but not finished drawing
+        self._refresh_area = Area()
 
     def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
         """
@@ -250,13 +252,22 @@ class Bitmap:
     def _finish_refresh(self):
         if self._read_only:
             return
-        self._dirty_area.x1 = 0
-        self._dirty_area.x2 = 0
+        self._refresh_area.x1 = 0
+        self._refresh_area.x2 = 0
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
-        if self._dirty_area.x1 == self._dirty_area.x2 or self._read_only:
+        if self._read_only:
             return
-        areas.append(self._dirty_area)
+        # Take the dirty area for the refresh starting now, rather than clearing it in
+        # _finish_refresh, so a write made while the refresh runs is left for the next
+        # one
+        dirty = self._dirty_area
+        if dirty.x1 != dirty.x2:
+            self._refresh_area.union(dirty, self._refresh_area)
+            dirty.x1 = 0
+            dirty.x2 = 0
+        if self._refresh_area.x1 != self._refresh_area.x2:
+            areas.append(self._refresh_area)
 
     @property
     def width(self) -> int:

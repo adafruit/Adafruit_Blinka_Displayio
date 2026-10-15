@@ -40,6 +40,8 @@ class Palette:
                             display's color space
         """
         self._needs_refresh = False
+        # A change a refresh has taken but not finished drawing
+        self._refreshing = False
         self._dither = dither
 
         self._colors = []
@@ -137,8 +139,17 @@ class Palette:
         """Returns True if the palette index is transparent. Returns False if opaque."""
         return self._colors[palette_index].transparent
 
+    def _get_refresh(self) -> bool:
+        """Take any change for the refresh starting now. Returns True if it must redraw."""
+        # Taken here rather than cleared in _finish_refresh, so a change made while
+        # the refresh runs is left for the next one
+        if self._needs_refresh:
+            self._needs_refresh = False
+            self._refreshing = True
+        return self._refreshing
+
     def _finish_refresh(self):
-        self._needs_refresh = False
+        self._refreshing = False
 
     @property
     def dither(self) -> bool:

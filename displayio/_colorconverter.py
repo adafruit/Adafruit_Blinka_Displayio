@@ -340,6 +340,9 @@ class ColorConverter:
         """Make the ColorConverter be opaque and have no transparent pixels."""
         self._transparent_color = None
 
+    def _get_refresh(self) -> bool:
+        return self._needs_refresh
+
     def _finish_refresh(self) -> None:
         pass
 

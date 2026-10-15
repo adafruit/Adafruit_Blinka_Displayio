@@ -1128,6 +1128,8 @@ class TileGrid:
         # pylint: disable=invalid-name, too-many-branches, too-many-statements
         first_draw = self._previous_area.x1 == self._previous_area.x2
         hidden = self._hidden_tilegrid or self._hidden_by_parent
+        # Taken before any early return, since _finish_refresh no longer clears them
+        bitmap_areas, shader_dirty = self._take_source_changes()
 
         # Check hidden first because it trumps all other changes
         if hidden:
@@ -1148,26 +1150,17 @@ class TileGrid:
             return
 
         # If we have an in-memory bitmap, then check it for modifications
-        if isinstance(self._bitmap, Bitmap):
-            # Collect the bitmap's dirty area in a scratch list to keep it out of areas.
-            bitmap_areas = []
-            self._bitmap._get_refresh_areas(  # pylint: disable=protected-access
-                bitmap_areas
-            )
-            if bitmap_areas:
-                refresh_area = bitmap_areas[-1]
-                # Special case a TileGrid that shows a full bitmap and use its
-                # dirty area. Copy it to ours so we can transform it.
-                if self._tiles_in_bitmap == 1:
-                    refresh_area.copy_into(self._dirty_area)
-                    self._partial_change = True
-                else:
-                    self._full_change = True
+        if bitmap_areas:
+            refresh_area = bitmap_areas[-1]
+            # Special case a TileGrid that shows a full bitmap and use its
+            # dirty area. Copy it to ours so we can transform it.
+            if self._tiles_in_bitmap == 1:
+                refresh_area.copy_into(self._dirty_area)
+                self._partial_change = True
+            else:
+                self._full_change = True
 
-        self._full_change = self._full_change or (
-            isinstance(self._pixel_shader, (Palette, ColorConverter))
-            and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
-        )
+        self._full_change = self._full_change or shader_dirty
         if self._full_change or first_draw:
             areas.append(self._current_area)
             self._needs_refresh = False
@@ -1235,11 +1228,25 @@ class TileGrid:
 
     def _prepare_full_refresh(self) -> None:
         """A full refresh draws this TileGrid where it is now, so record that."""
-        # Only the area. The change flags stay set, because _finish_refresh must not
-        # clear a change made while this refresh is running
         hidden = self._hidden_tilegrid or self._hidden_by_parent
         if self._previous_area.x1 == self._previous_area.x2 and not hidden:
             self._current_area.copy_into(self._previous_area)
+        # Take every change now, as _get_refresh_areas does, so _finish_refresh can
+        # clear them. Cleared first, so a change made from here on sets it again
+        self._needs_refresh = False
+        self._take_source_changes()
+
+    def _take_source_changes(self) -> tuple[list[Area], bool]:
+        """Take the bitmap and pixel shader changes for the refresh starting now."""
+        # pylint: disable=protected-access
+        bitmap_areas = []
+        if isinstance(self._bitmap, Bitmap):
+            self._bitmap._get_refresh_areas(bitmap_areas)
+        shader_dirty = (
+            isinstance(self._pixel_shader, (Palette, ColorConverter))
+            and self._pixel_shader._get_refresh()
+        )
+        return bitmap_areas, shader_dirty
 
     def _get_previous_area(self, area: Area) -> bool:
         """Copy the area last drawn into area. Returns False if nothing was drawn."""
