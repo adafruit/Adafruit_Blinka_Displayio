@@ -282,9 +282,11 @@ class _VectorShape:
             x = self._absolute_transform.x + self._absolute_transform.dx * self._y
             y = self._absolute_transform.y + self._absolute_transform.dy * self._x
             if self._absolute_transform.dx < 1:
+                x -= 1
                 out_area.y1 = out_area.y1 * -1 + 1
                 out_area.y2 = out_area.y2 * -1 + 1
             if self._absolute_transform.dy < 1:
+                y -= 1
                 out_area.x1 = out_area.x1 * -1 + 1
                 out_area.x2 = out_area.x2 * -1 + 1
             self._area_transpose(out_area)
@@ -292,9 +294,11 @@ class _VectorShape:
             x = self._absolute_transform.x + self._absolute_transform.dx * self._x
             y = self._absolute_transform.y + self._absolute_transform.dy * self._y
             if self._absolute_transform.dx < 1:
+                x -= 1
                 out_area.x1 = out_area.x1 * -1 + 1
                 out_area.x2 = out_area.x2 * -1 + 1
             if self._absolute_transform.dy < 1:
+                y -= 1
                 out_area.y1 = out_area.y1 * -1 + 1
                 out_area.y2 = out_area.y2 * -1 + 1
         out_area.canon()
@@ -316,9 +320,9 @@ class _VectorShape:
             )
 
             if self._absolute_transform.dx < 1:
-                out_shape_x *= -1
+                out_shape_y = -out_shape_y - 1
             if self._absolute_transform.dy < 1:
-                out_shape_y *= -1
+                out_shape_x = -out_shape_x - 1
         else:
             out_shape_x = (
                 x - self._absolute_transform.x - self._absolute_transform.dx * self._x
@@ -328,9 +332,9 @@ class _VectorShape:
             )
 
             if self._absolute_transform.dx < 1:
-                out_shape_x *= -1
+                out_shape_x = -out_shape_x - 1
             if self._absolute_transform.dy < 1:
-                out_shape_y *= -1
+                out_shape_y = -out_shape_y - 1
 
             # It's mirrored via dx. Maybe we need to add support for also separately mirroring?
             # if self.absolute_transform.mirror_x:
@@ -381,16 +385,20 @@ class _VectorShape:
             if xform.transpose_xy:
                 origin_x = xform.y + xform.dy * self._x
                 origin_y = xform.x + xform.dx * self._y
+                sign_x = -1 if xform.dy < 1 else 1
+                sign_y = -1 if xform.dx < 1 else 1
             else:
                 origin_x = xform.x + xform.dx * self._x
                 origin_y = xform.y + xform.dy * self._y
-            transform = (
-                xform.transpose_xy,
-                origin_x,
-                origin_y,
-                -1 if xform.dx < 1 else 1,
-                -1 if xform.dy < 1 else 1,
-            )
+                sign_x = -1 if xform.dx < 1 else 1
+                sign_y = -1 if xform.dy < 1 else 1
+            # A flipped axis maps to -(screen - origin) - 1, as in
+            # _screen_to_shape_coordinates
+            if sign_x < 0:
+                origin_x -= 1
+            if sign_y < 0:
+                origin_y -= 1
+            transform = (xform.transpose_xy, origin_x, origin_y, sign_x, sign_y)
             geometry = (
                 line_dirty_offset_px + column_dirty_offset_px,
                 linestride_px,
