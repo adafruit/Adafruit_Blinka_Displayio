@@ -39,17 +39,17 @@ def fill_region(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: 
                 dest_bitmap[x, y] = value
         return
 
-    # Clip to the bitmap and mark it dirty once
+    # Clip to the bitmap, and mark it dirty once after writing, as Bitmap.fill does
     x1 = max(x1, 0)
     y1 = max(y1, 0)
     x2 = min(x2, dest_bitmap.width)
     y2 = min(y2, dest_bitmap.height)
     if x1 >= x2 or y1 >= y2:
         return
-    dest_bitmap.dirty(x1, y1, x2, y2)
     for y in range(y1, y2):
         for x in range(x1, x2):
             dest_bitmap._write_pixel(x, y, value)  # pylint: disable=protected-access
+    dest_bitmap.dirty(x1, y1, x2, y2)
 
 
 def draw_line(dest_bitmap: Bitmap, x1: int, y1: int, x2: int, y2: int, value: int):
@@ -224,7 +224,7 @@ def blit(
         type(dest_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
         and type(source_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
     ):
-        # Clip the destination to the bitmap and mark it dirty once
+        # Clip the destination to the bitmap, and mark it dirty once after writing
         dx1 = max(x, 0)
         dy1 = max(y, 0)
         dx2 = min(x + x2 - x1, dest_bitmap.width)
@@ -236,7 +236,6 @@ def blit(
         # Negative source coordinates are an error, as in __getitem__
         if dx1 + ox < 0 or dy1 + oy < 0:
             raise ValueError(f"Index {(dx1 + ox, dy1 + oy)} is out of range")
-        dest_bitmap.dirty(dx1, dy1, dx2, dy2)
         get_source = source_bitmap._get_pixel  # pylint: disable=protected-access
         get_dest = dest_bitmap._get_pixel  # pylint: disable=protected-access
         write_dest = dest_bitmap._write_pixel  # pylint: disable=protected-access
@@ -251,6 +250,7 @@ def blit(
                 if skip_dest_index is not None and get_dest(dx, dy) == skip_dest_index:
                     continue
                 write_dest(dx, dy, value)
+        dest_bitmap.dirty(dx1, dy1, dx2, dy2)
         return
 
     y_counts = range(y2 - y1)[::-1] if y_reverse else range(y2 - y1)
@@ -412,18 +412,11 @@ def rotozoom(
     rowu = startu + miny * du_col
     rowv = startv + miny * dv_col
 
-    # An exact Bitmap is marked dirty once and written directly, which truncates a
-    # value too big for it; a subclass may override __setitem__ or return integer-like
-    # values from __getitem__, so it keeps the setter
-    if (
-        type(dest_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
-        and type(source_bitmap) is Bitmap  # pylint: disable=unidiomatic-typecheck
-    ):
-        # Clamp to the bitmap, as C clamps the clip region, so the area is never backwards
-        dx1, dy1 = max(minx, 0), max(miny, 0)
-        dx2, dy2 = min(maxx + 1, dest_bitmap.width), min(maxy + 1, dest_bitmap.height)
-        if dx1 < dx2 and dy1 < dy2:
-            dest_bitmap.dirty(dx1, dy1, dx2, dy2)
+    # An exact Bitmap is written directly, truncating a value too big for it; a
+    # subclass may override __setitem__ or __getitem__, so it keeps the setter
+    # pylint: disable-next=unidiomatic-typecheck
+    direct = type(dest_bitmap) is Bitmap and type(source_bitmap) is Bitmap
+    if direct:
         write = dest_bitmap._write_pixel  # pylint: disable=protected-access
     else:
 
@@ -444,6 +437,12 @@ def rotozoom(
             v += dv_row
         rowu += du_col
         rowv += dv_col
+    if direct:
+        # Clamp to the bitmap, as C clamps the clip region, so the area is never backwards
+        dx1, dy1 = max(minx, 0), max(miny, 0)
+        dx2, dy2 = min(maxx + 1, dest_bitmap.width), min(maxy + 1, dest_bitmap.height)
+        if dx1 < dx2 and dy1 < dy2:
+            dest_bitmap.dirty(dx1, dy1, dx2, dy2)
 
 
 def arrayblit(
