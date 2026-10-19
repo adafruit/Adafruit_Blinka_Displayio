@@ -33,9 +33,9 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
 # while the refresh takes it is either in that refresh or left for the next one
 _dirty_lock = Lock()
 
-# Counts the times a display has started collecting refresh areas. A bitmap takes
-# its dirty area once per collection, so every TileGrid showing it draws the same
-# area, even when a write lands between their takes
+# Counts the times a display has started collecting refresh areas. A bitmap or
+# palette takes its changes once per collection, so every layer showing it draws
+# the same change, even when one lands between their takes
 _collection = [0]
 
 
