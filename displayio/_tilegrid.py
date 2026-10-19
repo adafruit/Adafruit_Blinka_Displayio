@@ -847,7 +847,9 @@ class TileGrid:
         overlap = Area()  # area, current_area, overlap
         if not area.compute_overlap(self._current_area, overlap):
             return False
-        self._current_area.union(self._drawn_area, self._drawn_area)
+        # Record the overlap worked out above, not _current_area, which the app may
+        # have moved since
+        overlap.union(self._drawn_area, self._drawn_area)
         # else:
         #    print("Checking", area.x1, area.y1, area.x2, area.y2)
         #    print("Overlap", overlap.x1, overlap.y1, overlap.x2, overlap.y2)
