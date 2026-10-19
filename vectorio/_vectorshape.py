@@ -543,14 +543,14 @@ class _VectorShape:
         """Consume dirty state covered by a full display refresh."""
         shader_dirty = (
             isinstance(self._pixel_shader, (Palette, ColorConverter))
-            and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
+            and self._pixel_shader._get_refresh()  # pylint: disable=protected-access
         )
         self._refresh_state_dirty = self._consume_dirty_areas() or shader_dirty
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         shader_dirty = (
             isinstance(self._pixel_shader, (Palette, ColorConverter))
-            and self._pixel_shader._needs_refresh  # pylint: disable=protected-access
+            and self._pixel_shader._get_refresh()  # pylint: disable=protected-access
         )
         if not self._pending_dirty_areas and not shader_dirty:
             return

@@ -27,6 +27,7 @@ from displayio._displaycore import _DisplayCore
 from displayio._group import Group, circuitpython_splash
 from displayio._colorconverter import ColorConverter
 from displayio._area import Area
+from displayio._bitmap import _start_collection
 from displayio._constants import (
     CHIP_SELECT_TOGGLE_EVERY_BYTE,
     CHIP_SELECT_UNTOUCHED,
@@ -352,6 +353,7 @@ class EPaperDisplay:
     def _get_refresh_areas(self) -> list[Area]:
         """Get a list of areas to be refreshed"""
         areas = []
+        _start_collection()
         if self._core.full_refresh:
             if self._core.current_group is not None:
                 self._core.current_group._prepare_full_refresh()  # pylint: disable=protected-access

@@ -21,12 +21,26 @@ from __future__ import annotations
 import operator
 import struct
 from array import array
+from threading import Lock
 from typing import Union, Tuple
 from circuitpython_typing import WriteableBuffer
 from ._area import Area
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+# Held while a bitmap's dirty area grows or a refresh takes it, so a write made
+# while the refresh takes it is either in that refresh or left for the next one
+_dirty_lock = Lock()
+
+# Counts the times a display has started collecting refresh areas. A bitmap or
+# palette takes its changes once per collection, so every layer showing it draws
+# the same change, even when one lands between their takes
+_collection = [0]
+
+
+def _start_collection() -> None:
+    _collection[0] += 1
 
 
 def stride(width: int, bits_per_pixel: int) -> int:
@@ -71,6 +85,8 @@ class Bitmap:
                 bits += 8
 
         self._from_buffer(width, height, bits, None, False)
+        # The collection that last took the dirty area, see _start_collection
+        self._taken_in = -1
 
     def _from_buffer(
         self,
@@ -119,6 +135,8 @@ class Bitmap:
         # Values with these bits set raise at 8+ bits; smaller depths mask
         self._value_reject = ~self._bitmask if bits_per_value >= 8 else 0
         self._dirty_area = Area(0, 0, width, height)
+        # The dirty area a refresh has taken but not finished drawing
+        self._refresh_area = Area()
 
     def __getitem__(self, index: Union[Tuple[int, int], int]) -> int:
         """
@@ -243,20 +261,33 @@ class Bitmap:
 
         area = dirty_area
         area.canon()
-        area.union(self._dirty_area, area)
         bitmap_area = Area(0, 0, self._bmp_width, self._bmp_height)
-        area.compute_overlap(bitmap_area, self._dirty_area)
+        with _dirty_lock:
+            area.union(self._dirty_area, area)
+            area.compute_overlap(bitmap_area, self._dirty_area)
 
     def _finish_refresh(self):
         if self._read_only:
             return
-        self._dirty_area.x1 = 0
-        self._dirty_area.x2 = 0
+        self._refresh_area.x1 = 0
+        self._refresh_area.x2 = 0
+        self._taken_in = -1
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
-        if self._dirty_area.x1 == self._dirty_area.x2 or self._read_only:
+        if self._read_only:
             return
-        areas.append(self._dirty_area)
+        # Take the dirty area for the refresh starting now, rather than clearing it in
+        # _finish_refresh, so a write made while the refresh runs is left for the next
+        # one. Cleared with one store, so the unlocked check in __setitem__ never sees
+        # it half cleared
+        with _dirty_lock:
+            dirty = self._dirty_area
+            if self._taken_in != _collection[0] and dirty.x1 != dirty.x2:
+                self._refresh_area.union(dirty, self._refresh_area)
+                dirty.x2 = dirty.x1
+            self._taken_in = _collection[0]
+        if self._refresh_area.x1 != self._refresh_area.x2:
+            areas.append(self._refresh_area)
 
     @property
     def width(self) -> int:
