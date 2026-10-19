@@ -708,6 +708,8 @@ class TileGrid:
         self._current_area = Area(0, 0, self._pixel_width, self._pixel_height)
         self._dirty_area = Area(0, 0, 0, 0)
         self._previous_area = Area(0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF)
+        # Every spot the refresh under way drew this TileGrid at
+        self._drawn_area = Area(0, 0, 0, 0)
         self._moved = False
         self._full_change = True
         self._partial_change = True
@@ -845,6 +847,9 @@ class TileGrid:
         overlap = Area()  # area, current_area, overlap
         if not area.compute_overlap(self._current_area, overlap):
             return False
+        # Record the overlap worked out above, not _current_area, which the app may
+        # have moved since
+        overlap.union(self._drawn_area, self._drawn_area)
         # else:
         #    print("Checking", area.x1, area.y1, area.x2, area.y2)
         #    print("Overlap", overlap.x1, overlap.y1, overlap.x2, overlap.y2)
@@ -1123,6 +1128,10 @@ class TileGrid:
                 self._pixel_shader._finish_refresh()  # pylint: disable=protected-access
             if isinstance(self._bitmap, Bitmap):
                 self._bitmap._finish_refresh()  # pylint: disable=protected-access
+        # Keep every spot this refresh drew it at, even one it has moved away from
+        # since, or the next refresh would not erase it
+        self._previous_area.union(self._drawn_area, self._previous_area)
+        self._drawn_area.x2 = self._drawn_area.x1
 
     def _get_refresh_areas(self, areas: list[Area]) -> None:
         # pylint: disable=invalid-name, too-many-branches, too-many-statements
@@ -1142,10 +1151,13 @@ class TileGrid:
             self._previous_area.union(self._current_area, self._dirty_area)
             if self._dirty_area.size() < 2 * self._pixel_width * self._pixel_height:
                 areas.append(self._dirty_area)
-                self._needs_refresh = False
-                return
-            areas.append(self._current_area)
-            areas.append(self._previous_area)
+            else:
+                areas.append(self._current_area)
+                areas.append(self._previous_area)
+            # This refresh erases the old spot, so only what it draws is left. A new
+            # Area, since the one in areas has not been drawn yet
+            self._previous_area = Area()
+            self._current_area.copy_into(self._previous_area)
             self._needs_refresh = False
             return
 
@@ -1257,6 +1269,8 @@ class TileGrid:
             self._previous_area.union(self._current_area, area)
         else:
             self._previous_area.copy_into(area)
+        # The refresh under way may have drawn it somewhere else before a move
+        area.union(self._drawn_area, area)
         return not area.empty()
 
     def _set_all_tiles(self, tile_index: int) -> None:
