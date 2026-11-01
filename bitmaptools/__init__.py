@@ -412,8 +412,7 @@ def rotozoom(
     rowu = startu + miny * du_col
     rowv = startv + miny * dv_col
 
-    # An exact Bitmap is written directly, truncating a value too big for it; a
-    # subclass may override __setitem__ or __getitem__, so it keeps the setter
+    # An exact Bitmap is written directly, which truncates; a subclass keeps its setter
     # pylint: disable-next=unidiomatic-typecheck
     direct = type(dest_bitmap) is Bitmap and type(source_bitmap) is Bitmap
     if direct:
@@ -423,26 +422,28 @@ def rotozoom(
         def write(x, y, c):
             dest_bitmap[x, y] = c
 
-    for y in range(miny, maxy + 1):
-        u = rowu + minx * du_row
-        v = rowv + minx * dv_row
-        for x in range(minx, maxx + 1):
-            if (source_clip0_x <= u < source_clip1_x) and (
-                source_clip0_y <= v < source_clip1_y
-            ):
-                c = source_bitmap[int(u), int(v)]
-                if skip_index is None or c != skip_index:
-                    write(x, y, c)
-            u += du_row
-            v += dv_row
-        rowu += du_col
-        rowv += dv_col
-    if direct:
-        # Clamp to the bitmap, as C clamps the clip region, so the area is never backwards
-        dx1, dy1 = max(minx, 0), max(miny, 0)
-        dx2, dy2 = min(maxx + 1, dest_bitmap.width), min(maxy + 1, dest_bitmap.height)
-        if dx1 < dx2 and dy1 < dy2:
-            dest_bitmap.dirty(dx1, dy1, dx2, dy2)
+    try:
+        for y in range(miny, maxy + 1):
+            u = rowu + minx * du_row
+            v = rowv + minx * dv_row
+            for x in range(minx, maxx + 1):
+                if (source_clip0_x <= u < source_clip1_x) and (
+                    source_clip0_y <= v < source_clip1_y
+                ):
+                    c = source_bitmap[int(u), int(v)]
+                    if skip_index is None or c != skip_index:
+                        write(x, y, c)
+                u += du_row
+                v += dv_row
+            rowu += du_col
+            rowv += dv_col
+    finally:
+        if direct:
+            # Clamp to the bitmap, as C clamps the clip region, so the area is never backwards
+            dx1, dx2 = max(minx, 0), min(maxx + 1, dest_bitmap.width)
+            dy1, dy2 = max(miny, 0), min(maxy + 1, dest_bitmap.height)
+            if dx1 < dx2 and dy1 < dy2:
+                dest_bitmap.dirty(dx1, dy1, dx2, dy2)
 
 
 def arrayblit(
