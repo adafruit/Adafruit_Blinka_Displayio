@@ -235,7 +235,6 @@ class Bitmap:
         """Fills the bitmap with the supplied palette index value."""
         if self._read_only:
             raise RuntimeError("Read-only")
-        self._set_dirty_area(Area(0, 0, self._bmp_width, self._bmp_height))
 
         # build the packed word
         word = 0
@@ -245,6 +244,9 @@ class Bitmap:
         # copy it in
         for i in range(self._stride * self._bmp_height):
             self._data[i] = word
+        # Mark dirty after writing, so a refresh that takes the area part way
+        # through leaves the rest marked for the next one
+        self._set_dirty_area(Area(0, 0, self._bmp_width, self._bmp_height))
 
     def dirty(self, x1: int = 0, y1: int = 0, x2: int = -1, y2: int = -1) -> None:
         """Inform displayio of bitmap updates done via the buffer protocol."""
