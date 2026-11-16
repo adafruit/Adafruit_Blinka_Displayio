@@ -25,3 +25,9 @@
 
 .. automodule:: busdisplay
     :members:
+
+.. automodule:: framebufferio
+    :members:
+
+.. automodule:: linuxframebuffer
+    :members:
