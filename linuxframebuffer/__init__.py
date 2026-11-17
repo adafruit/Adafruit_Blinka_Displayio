@@ -179,6 +179,7 @@ class LinuxFramebuffer:
             raise ValueError("color_depth 32 needs an XRGB8888 framebuffer")
         # displayio draws RGB565 into a copy, converted into the device at each refresh
         self._shadow = bytearray(width * height * 2)
+        self._areas = []
         self._table = _rgb565_table(fields, "H" if bits_per_pixel == 16 else "I")
         if transp[1]:
             # Opaque alpha, in case the device uses it
@@ -262,8 +263,20 @@ class LinuxFramebuffer:
             return self._shadow
         return self._mmap
 
+    def _area_written(self, x1: int, y1: int, x2: int, y2: int) -> None:
+        # pylint: disable=invalid-name
+        if self._shadow is not None:
+            self._areas.append((x1, y1, x2, y2))
+
     def _swapbuffers(self, dirty_row_bitmask: bytearray) -> None:
         if self._shadow is None or self._mmap is None:
+            return
+        if self._areas:
+            # Only the areas drawn, rather than the whole dirty rows: with the
+            # display rotated, a small area spans many rows
+            for area in self._areas:
+                self._convert_area(*area)
+            self._areas.clear()
             return
         row = 0
         while row < self._height:
@@ -274,6 +287,26 @@ class LinuxFramebuffer:
             while row < self._height and dirty_row_bitmask[row // 8] & (1 << (row & 7)):
                 row += 1
             self._convert_rows(first, row)
+
+    def _convert_area(self, x1: int, y1: int, x2: int, y2: int) -> None:
+        """Convert an area of the RGB565 copy into the device"""
+        # pylint: disable=invalid-name
+        if x1 == 0 and x2 == self._width:
+            self._convert_rows(y1, y2)
+            return
+        width = self._width
+        source = memoryview(self._shadow).cast("H")
+        destination = memoryview(self._mmap)
+        lookup = self._table.__getitem__
+        typecode = self._table.typecode
+        size = (x2 - x1) * self._device_bytes
+        offset = self._device_offset + y1 * self._line_length + x1 * self._device_bytes
+        for row in range(y1 * width, y2 * width, width):
+            pixels = array(typecode, map(lookup, source[row + x1 : row + x2]))
+            destination[offset : offset + size] = memoryview(pixels).cast("B")
+            offset += self._line_length
+        destination.release()
+        source.release()
 
     def _convert_rows(self, first: int, last: int) -> None:
         """Convert the RGB565 rows first to last - 1 of the copy into the device"""

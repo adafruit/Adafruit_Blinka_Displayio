@@ -41,6 +41,13 @@ and optionally these, which default to the value in parentheses:
   byte swapped, big endian on a little endian host
 * ``_get_brightness()``, ``_set_brightness(value)`` (no brightness control)
 
+and, specific to Blinka:
+
+* ``_area_written(x1, y1, x2, y2)``: called for each area drawn into the
+  pixels, before ``_swapbuffers()``, in framebuffer coordinates (``x2`` and
+  ``y2`` excluded), so that a framebuffer that converts its pixels can
+  convert only those areas instead of the whole dirty rows
+
 16 bit pixels are RGB565 and 32 bit pixels 0x00RRGGBB, as native integers.
 
 **Software and Dependencies:**
@@ -333,6 +340,10 @@ class FramebufferDisplay:
             dirty_row_bitmask[row // 8] |= 1 << (row & 7)
             offset += self._row_stride
             start += row_size
+
+        area_written = getattr(self._framebuffer, "_area_written", None)
+        if area_written is not None:
+            area_written(clipped.x1, clipped.y1, clipped.x2, clipped.y2)
 
     def fill_row(self, y: int, buffer: WriteableBuffer) -> WriteableBuffer:
         """Extract the pixels from a single row
