@@ -20,6 +20,8 @@ displayio for Blinka
 # pylint: disable=too-many-lines
 
 import struct
+import sys
+from array import array
 from typing import Union, Optional, Tuple
 from circuitpython_typing import WriteableBuffer
 from ._bitmap import Bitmap
@@ -70,6 +72,208 @@ def _palette_table(palette: Palette, colorspace: Colorspace, count: int):
 
 
 def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bool:
+    # pylint: disable=too-many-arguments
+    """TileGrid._fill_area for a Bitmap of up to 8 bits per value with a Palette on a
+    16 bit display: a line of the buffer at a time where the buffers allow it, else a
+    pixel at a time. Returns False if a transparent pixel was left unset."""
+    if _can_fill_lines(buffer, mask, bitmap, geometry):
+        return _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
+    return _fill_pixels_loop(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
+
+
+# The values of a byte of a 1, 2 or 4 bit Bitmap, first value in the high bits
+_UNPACK = {
+    bits: tuple(
+        bytes(
+            (byte >> (8 - (i + 1) * bits)) & ((1 << bits) - 1) for i in range(8 // bits)
+        )
+        for byte in range(256)
+    )
+    for bits in (1, 2, 4)
+}
+# Opaque pixels, transparent pixels: as bits for int(), and as byte masks
+_BIT_CHARS = b"01"
+_BYTE_MASKS = bytes.maketrans(b"01", b"\x00\xff")
+
+
+def _can_fill_lines(buffer, mask, bitmap, geometry) -> bool:
+    """True when _fill_lines can read the bitmap and the mask in bulk, and one of the
+    strides walks the buffer in steps of one pixel."""
+    # pylint: disable=protected-access
+    # The mask words are read as one little endian int
+    if sys.byteorder != "little":
+        return False
+    if not isinstance(buffer, memoryview) or buffer.itemsize != 2:
+        return False
+    if not isinstance(mask, (memoryview, array)) or mask.itemsize != 4:
+        return False
+    if bitmap._bits_per_value < 8 and getattr(bitmap._data, "itemsize", 1) < 4:
+        return False
+    x_stride, y_stride = geometry[1:3]
+    return abs(x_stride) == 1 or abs(y_stride) == 1
+
+
+def _bitmap_values(bitmap, tile_x: int, tile_y: int, count: int) -> bytes:
+    """count values of a bitmap row from tile_x on, one byte each; 0 outside the
+    bitmap, as Bitmap._get_pixel does."""
+    # pylint: disable=protected-access
+    width = bitmap._bmp_width
+    if tile_y >= bitmap._bmp_height or tile_x >= width:
+        return bytes(count)
+    inside = min(count, width - tile_x)
+    bits = bitmap._bits_per_value
+    words = bitmap._data
+    if bits == 8:
+        start = tile_y * bitmap._stride * words.itemsize + tile_x
+        values = bytes(memoryview(words).cast("B")[start : start + inside])
+    else:
+        # Big endian words list the values in order, first value in the high bits
+        shift = bitmap._x_shift
+        first = tile_y * bitmap._stride + (tile_x >> shift)
+        last = tile_y * bitmap._stride + ((tile_x + inside - 1) >> shift)
+        words = words[first : last + 1]
+        if words.itemsize > 4:
+            # array("L") on 64 bit hosts, of which the values use 32 bits
+            words = [word & 0xFFFFFFFF for word in words]
+        packed = struct.pack(f">{len(words)}I", *words)
+        skip = tile_x & bitmap._x_mask
+        values = b"".join(map(_UNPACK[bits].__getitem__, packed))
+        values = values[skip : skip + inside]
+    if inside < count:
+        values += bytes(count - inside)
+    return values
+
+
+def _row_values(tilegrid, bitmap, local_y: int, start_x: int, end_x: int) -> bytes:
+    """The bitmap values of the pixels start_x to end_x of a row of the scaled
+    TileGrid, one byte each."""
+    # pylint: disable=too-many-locals, protected-access
+    scale = tilegrid._absolute_transform.scale
+    tile_width = tilegrid._tile_width
+    tile_height = tilegrid._tile_height
+    width_in_tiles = tilegrid._width_in_tiles
+    bitmap_width_in_tiles = tilegrid._bitmap_width_in_tiles
+    tile_row = (
+        (local_y // tile_height + tilegrid._top_left_y) % tilegrid._height_in_tiles
+    ) * width_in_tiles
+    first = start_x // scale
+    last = (end_x - 1) // scale
+    parts = []
+    local_x = first
+    while local_x <= last:
+        column = local_x // tile_width
+        count = min(last + 1, (column + 1) * tile_width) - local_x
+        tile = tilegrid._tiles[
+            tile_row + (column + tilegrid._top_left_x) % width_in_tiles
+        ]
+        parts.append(
+            _bitmap_values(
+                bitmap,
+                (tile % bitmap_width_in_tiles) * tile_width + local_x % tile_width,
+                (tile // bitmap_width_in_tiles) * tile_height + local_y % tile_height,
+                count,
+            )
+        )
+        local_x += count
+    values = b"".join(parts)
+    if scale == 1:
+        return values
+    scaled = bytearray(len(values) * scale)
+    for i in range(scale):
+        scaled[i::scale] = values
+    skip = start_x - first * scale
+    return bytes(scaled[skip : skip + end_x - start_x])
+
+
+def _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bool:
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+    # pylint: disable=too-many-statements, protected-access
+    """_fill_pixels a line of the buffer at a time: the bitmap values of a line are
+    turned into colors with bytes.translate, and the mask bits of the line into one
+    int, so that Python code runs per line instead of per pixel."""
+    start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
+    start_x, end_x, start_y, end_y = geometry[5:]
+    width = end_x - start_x
+    height = end_y - start_y
+    scale = tilegrid._absolute_transform.scale
+
+    # The values of the rows, each row once even when scaled
+    row_cache = {}
+    rows = []
+    for y in range(start_y, end_y):
+        local_y = y // scale
+        row = row_cache.get(local_y)
+        if row is None:
+            row = _row_values(tilegrid, bitmap, local_y, start_x, end_x)
+            row_cache[local_y] = row
+        rows.append(row)
+
+    # Lines of the buffer with the offset of their first pixel, in buffer order
+    if abs(x_stride) == 1:
+        lines = []
+        for y, row in enumerate(rows):
+            first = start + (y + y_shift) * y_stride + x_shift * x_stride
+            if x_stride < 0:
+                lines.append((first - width + 1, row[::-1]))
+            else:
+                lines.append((first, row))
+    else:
+        flat = b"".join(rows)
+        lines = []
+        for x in range(width):
+            first = start + (x + x_shift) * x_stride + y_shift * y_stride
+            column = flat[x::width]
+            if y_stride < 0:
+                lines.append((first - height + 1, column[::-1]))
+            else:
+                lines.append((first, column))
+
+    # Translation tables from a bitmap value to the bytes of its color
+    padding = bytes(256 - len(colors))
+    low = bytes(color & 0xFF for color in colors) + padding
+    high = bytes(color >> 8 for color in colors) + padding
+    opaque_bits = bytes(_BIT_CHARS[1 if flag else 0] for flag in opaque)
+    opaque_bits += _BIT_CHARS[:1] * (256 - len(opaque_bits))
+
+    full_coverage = True
+    mask_bytes = memoryview(mask).cast("B")
+    pixels = memoryview(buffer).cast("B")
+    for first, values in lines:
+        count = len(values)
+        everything = (1 << count) - 1
+        word_first = first >> 5
+        word_end = ((first + count - 1) >> 5) + 1
+        shift = first - word_first * 32
+        words = int.from_bytes(mask_bytes[word_first * 4 : word_end * 4], "little")
+        drawn = (words >> shift) & everything
+        shown = int(values.translate(opaque_bits)[::-1], 2)
+        write = shown & ~drawn
+        if ~shown & ~drawn & everything:
+            full_coverage = False
+        if not write:
+            continue
+        line = bytearray(count * 2)
+        line[0::2] = values.translate(low)
+        line[1::2] = values.translate(high)
+        if write != everything:
+            selected = format(write, f"0{count}b")[::-1].encode().translate(_BYTE_MASKS)
+            select = bytearray(count * 2)
+            select[0::2] = selected
+            select[1::2] = selected
+            select = int.from_bytes(select, "little")
+            old = int.from_bytes(pixels[first * 2 : (first + count) * 2], "little")
+            line = (
+                (int.from_bytes(line, "little") & select) | (old & ~select)
+            ).to_bytes(count * 2, "little")
+        pixels[first * 2 : (first + count) * 2] = line
+        words |= write << shift
+        mask_bytes[word_first * 4 : word_end * 4] = words.to_bytes(
+            (word_end - word_first) * 4, "little"
+        )
+    return full_coverage
+
+
+def _fill_pixels_loop(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bool:
     # pylint: disable=too-many-arguments, too-many-locals, protected-access
     """The pixel loop of TileGrid._fill_area for a Bitmap of up to 8 bits per value
     with a Palette on a 16 bit display. Works on plain ints and flat buffers only.
