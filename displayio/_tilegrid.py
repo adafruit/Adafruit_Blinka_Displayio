@@ -76,7 +76,9 @@ def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bo
     """TileGrid._fill_area for a Bitmap of up to 8 bits per value with a Palette on a
     16 bit display: a line of the buffer at a time where the buffers allow it, else a
     pixel at a time. Returns False if a transparent pixel was left unset."""
-    if _can_fill_lines(buffer, mask, bitmap, geometry):
+    if _lines_pay_off(geometry, tilegrid) and _can_fill_lines(
+        buffer, mask, bitmap, geometry
+    ):
         return _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
     return _fill_pixels_loop(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
 
@@ -94,6 +96,21 @@ _UNPACK = {
 # Opaque pixels, transparent pixels: as bits for int(), and as byte masks
 _BIT_CHARS = b"01"
 _BYTE_MASKS = bytes.maketrans(b"01", b"\x00\xff")
+
+
+def _lines_pay_off(geometry, tilegrid) -> bool:
+    """True when the area is big enough for _fill_lines to be faster than the pixel
+    loop. Measured on a Cortex-A7, a row that _fill_lines reads and a line that it
+    writes cost about as much as 8 pixels of the loop (anything from 4 to 12 gave
+    the same times): a glyph of terminalio's font is faster pixel by pixel at scale
+    1, a line at a time at scale 4."""
+    # pylint: disable=protected-access
+    x_stride, _, _, _, start_x, end_x, start_y, end_y = geometry[1:]
+    width = end_x - start_x
+    height = end_y - start_y
+    rows = height // tilegrid._absolute_transform.scale + 1
+    lines = height if abs(x_stride) == 1 else width
+    return width * height >= 8 * (rows + lines)
 
 
 def _can_fill_lines(buffer, mask, bitmap, geometry) -> bool:
