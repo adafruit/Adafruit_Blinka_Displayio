@@ -43,6 +43,7 @@ import fcntl
 import mmap
 import os
 import struct
+import sys
 import warnings
 from array import array
 from typing import Optional
@@ -86,6 +87,59 @@ def _rgb565_table(fields, typecode: str) -> array:
     green = _channel(*fields[1], 6)
     blue = _channel(*fields[2], 5)
     return array(typecode, (r | g | b for r in red for g in green for b in blue))
+
+
+def _byte_channels(fields, alpha: int) -> Optional[tuple]:
+    """How to convert RGB565 into a 32 bit device a byte at a time, when its red,
+    green and blue fields are whole bytes: the byte of each of red, green and blue
+    with its translation table, and the constant bytes of the other fields. None
+    for other formats."""
+    if sys.byteorder != "little" or any(
+        length != 8 or offset % 8 for offset, length in fields
+    ):
+        return None
+    used = [offset // 8 for offset, _ in fields]
+    if len(set(used)) != 3 or any(alpha >> (byte * 8) & 0xFF for byte in used):
+        return None
+    red, green, blue = (_channel(0, 8, bits) for bits in (5, 6, 5))
+    tables = (
+        # Red is the top 5 bits of the high byte, blue the low 5 bits of the low
+        # byte, green the index made by _convert_channels
+        bytes(red[value >> 3] for value in range(256)),
+        bytes(green) + bytes(256 - len(green)),
+        bytes(blue[value & 0x1F] for value in range(256)),
+    )
+    constants = tuple(
+        (byte, alpha >> (byte * 8) & 0xFF)
+        for byte in range(4)
+        if byte not in used and alpha >> (byte * 8) & 0xFF
+    )
+    return tuple(zip(used, tables)), constants
+
+
+# Green has 3 bits in the low byte and 3 in the high byte of an RGB565 pixel
+_GREEN_LOW = bytes(value >> 5 for value in range(256))
+_GREEN_HIGH = bytes((value & 7) << 3 for value in range(256))
+
+
+def _convert_channels(channels, source: memoryview) -> bytearray:
+    """Convert RGB565 pixels (little endian bytes) into a 32 bit device a channel
+    at a time, with bytes.translate on all the pixels at once"""
+    (red, red_table), (green, green_table), (blue, blue_table) = channels[0]
+    low = bytes(source[0::2])
+    high = bytes(source[1::2])
+    count = len(low)
+    green_index = (
+        int.from_bytes(low.translate(_GREEN_LOW), "little")
+        | int.from_bytes(high.translate(_GREEN_HIGH), "little")
+    ).to_bytes(count, "little")
+    pixels = bytearray(count * 4)
+    pixels[red::4] = high.translate(red_table)
+    pixels[green::4] = green_index.translate(green_table)
+    pixels[blue::4] = low.translate(blue_table)
+    for byte, value in channels[1]:
+        pixels[byte::4] = bytes((value,)) * count
+    return pixels
 
 
 class LinuxFramebuffer:
@@ -174,18 +228,24 @@ class LinuxFramebuffer:
             # displayio draws straight into the device
             self._shadow = None
             self._table = None
+            self._channels = None
             return
         if color_depth == 32:
             raise ValueError("color_depth 32 needs an XRGB8888 framebuffer")
         # displayio draws RGB565 into a copy, converted into the device at each refresh
         self._shadow = bytearray(width * height * 2)
         self._areas = []
-        self._table = _rgb565_table(fields, "H" if bits_per_pixel == 16 else "I")
-        if transp[1]:
-            # Opaque alpha, in case the device uses it
-            alpha = ((1 << transp[1]) - 1) << transp[0]
-            for index, value in enumerate(self._table):
-                self._table[index] = value | alpha
+        # Opaque alpha, in case the device uses it
+        alpha = ((1 << transp[1]) - 1) << transp[0]
+        self._channels = None
+        if bits_per_pixel == 32:
+            self._channels = _byte_channels(fields, alpha)
+        self._table = None
+        if self._channels is None:
+            self._table = _rgb565_table(fields, "H" if bits_per_pixel == 16 else "I")
+            if alpha:
+                for index, value in enumerate(self._table):
+                    self._table[index] = value | alpha
 
     @staticmethod
     def _find_backlight(name: Optional[str]) -> Optional[str]:
@@ -288,50 +348,50 @@ class LinuxFramebuffer:
                 row += 1
             self._convert_rows(first, row)
 
+    def _convert(self, source: memoryview):
+        """Convert RGB565 bytes of the copy into bytes of the device"""
+        if self._channels is not None:
+            return _convert_channels(self._channels, source)
+        return memoryview(
+            array(self._table.typecode, map(self._table.__getitem__, source.cast("H")))
+        ).cast("B")
+
     def _convert_area(self, x1: int, y1: int, x2: int, y2: int) -> None:
         """Convert an area of the RGB565 copy into the device"""
         # pylint: disable=invalid-name
         if x1 == 0 and x2 == self._width:
             self._convert_rows(y1, y2)
             return
-        width = self._width
-        source = memoryview(self._shadow).cast("H")
+        row_bytes = self._width * 2
+        source = memoryview(self._shadow)
         destination = memoryview(self._mmap)
-        lookup = self._table.__getitem__
-        typecode = self._table.typecode
         size = (x2 - x1) * self._device_bytes
         offset = self._device_offset + y1 * self._line_length + x1 * self._device_bytes
-        for row in range(y1 * width, y2 * width, width):
-            pixels = array(typecode, map(lookup, source[row + x1 : row + x2]))
-            destination[offset : offset + size] = memoryview(pixels).cast("B")
+        for row in range(y1 * row_bytes, y2 * row_bytes, row_bytes):
+            destination[offset : offset + size] = self._convert(
+                source[row + x1 * 2 : row + x2 * 2]
+            )
             offset += self._line_length
         destination.release()
         source.release()
 
     def _convert_rows(self, first: int, last: int) -> None:
         """Convert the RGB565 rows first to last - 1 of the copy into the device"""
-        width = self._width
-        row_bytes = width * self._device_bytes
-        source = memoryview(self._shadow).cast("H")
+        row_bytes = self._width * 2
+        device_row_bytes = self._width * self._device_bytes
+        source = memoryview(self._shadow)
         destination = memoryview(self._mmap)
-        lookup = self._table.__getitem__
-        if self._line_length == row_bytes:
+        if self._line_length == device_row_bytes:
             # Contiguous rows: convert them at once
-            pixels = array(
-                self._table.typecode, map(lookup, source[first * width : last * width])
-            )
+            pixels = self._convert(source[first * row_bytes : last * row_bytes])
             offset = self._device_offset + first * self._line_length
-            destination[
-                offset : offset + len(pixels) * self._device_bytes
-            ] = memoryview(pixels).cast("B")
+            destination[offset : offset + len(pixels)] = pixels
         else:
             for row in range(first, last):
-                pixels = array(
-                    self._table.typecode,
-                    map(lookup, source[row * width : (row + 1) * width]),
-                )
                 offset = self._device_offset + row * self._line_length
-                destination[offset : offset + row_bytes] = memoryview(pixels).cast("B")
+                destination[offset : offset + device_row_bytes] = self._convert(
+                    source[row * row_bytes : (row + 1) * row_bytes]
+                )
         destination.release()
         source.release()
 
