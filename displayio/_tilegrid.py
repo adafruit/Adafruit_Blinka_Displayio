@@ -930,10 +930,9 @@ class TileGrid:
         ) * (end_y - start_y) >= min(
             len(self._pixel_shader), 1 << bitmap._bits_per_pixel
         ):
-            # One entry per palette colour, not one per value the file can hold, so a
-            # malformed file whose index is past the palette raises as it did before
+            # Leave indices past the palette transparent, as in the per-pixel lookup.
             colors, opaque = _palette_table(
-                self._pixel_shader, colorspace, len(self._pixel_shader)
+                self._pixel_shader, colorspace, 1 << bitmap._bits_per_pixel
             )
             geometry = (start, x_stride, y_stride, x_shift, y_shift)
             geometry += (start_x, end_x, start_y, end_y)
