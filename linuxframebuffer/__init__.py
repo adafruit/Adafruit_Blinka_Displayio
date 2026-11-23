@@ -44,6 +44,7 @@ import mmap
 import os
 import struct
 import sys
+import threading
 import warnings
 from array import array
 from typing import Optional
@@ -65,6 +66,7 @@ _FIX_SCREENINFO = struct.Struct("@16sLIIIIHHHILIIH2H0L")
 
 # linux/kd.h
 _KDSETMODE = 0x4B3A
+_KDGETMODE = 0x4B3B
 _KD_TEXT = 0
 _KD_GRAPHICS = 1
 
@@ -172,13 +174,15 @@ class LinuxFramebuffer:
         self._fd = os.open(device, os.O_RDWR)
         self._mmap = None
         self._console = None
+        # Taken by _swapbuffers() and deinit(), which a refresh thread and the
+        # main thread may call at the same time
+        self._lock = threading.Lock()
         try:
             self._setup(color_depth)
+            self._backlight = self._find_backlight(backlight)
         except:
             self.deinit()
             raise
-
-        self._backlight = self._find_backlight(backlight)
 
         try:
             fcntl.ioctl(self._fd, _FBIOBLANK, _FB_BLANK_UNBLANK)
@@ -222,7 +226,13 @@ class LinuxFramebuffer:
         )
 
         rgb565 = bits_per_pixel == 16 and fields == ((11, 5), (5, 6), (0, 5))
-        xrgb8888 = bits_per_pixel == 32 and fields == ((16, 8), (8, 8), (0, 8))
+        # Without an alpha field: displayio draws 0x00RRGGBB, transparent pixels
+        # on a device that uses its alpha byte
+        xrgb8888 = (
+            bits_per_pixel == 32
+            and fields == ((16, 8), (8, 8), (0, 8))
+            and transp[1] == 0
+        )
         self._color_depth = color_depth
         if (color_depth == 16 and rgb565) or (color_depth == 32 and xrgb8888):
             # displayio draws straight into the device
@@ -269,20 +279,35 @@ class LinuxFramebuffer:
             warnings.warn(f"The text console may draw over the display: {error}")
             return
         try:
+            mode = bytearray(4)
+            fcntl.ioctl(console, _KDGETMODE, mode)
+            if int.from_bytes(mode, sys.byteorder) != _KD_TEXT:
+                # Already in graphics mode: another program owns the console
+                os.close(console)
+                return
             fcntl.ioctl(console, _KDSETMODE, _KD_GRAPHICS)
         except OSError as error:
             os.close(console)
             warnings.warn(f"The text console may draw over the display: {error}")
             return
+        # Only this process gives the console back to text mode, not a child it
+        # forks, which inherits the atexit handler
         self._console = console
+        self._console_pid = os.getpid()
 
     def deinit(self) -> None:
         """Release the framebuffer device and give the display back to the text console"""
+        with self._lock:
+            self._release()
+        atexit.unregister(self.deinit)
+
+    def _release(self) -> None:
         if self._console is not None:
-            try:
-                fcntl.ioctl(self._console, _KDSETMODE, _KD_TEXT)
-            except OSError:
-                pass
+            if self._console_pid == os.getpid():
+                try:
+                    fcntl.ioctl(self._console, _KDSETMODE, _KD_TEXT)
+                except OSError:
+                    pass
             os.close(self._console)
             self._console = None
         if self._mmap is not None:
@@ -296,7 +321,6 @@ class LinuxFramebuffer:
         if self._fd is not None:
             os.close(self._fd)
             self._fd = None
-        atexit.unregister(self.deinit)
 
     def __enter__(self) -> "LinuxFramebuffer":
         return self
@@ -329,6 +353,10 @@ class LinuxFramebuffer:
             self._areas.append((x1, y1, x2, y2))
 
     def _swapbuffers(self, dirty_row_bitmask: bytearray) -> None:
+        with self._lock:
+            self._swap(dirty_row_bitmask)
+
+    def _swap(self, dirty_row_bitmask: bytearray) -> None:
         if self._shadow is None or self._mmap is None:
             return
         if self._areas:
