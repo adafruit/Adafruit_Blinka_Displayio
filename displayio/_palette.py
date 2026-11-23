@@ -113,7 +113,10 @@ class Palette:
         output_color: OutputPixelStruct,
     ):
         palette_index = input_pixel.pixel
-        if palette_index > len(self._colors) or self._colors[palette_index].transparent:
+        if (
+            palette_index >= len(self._colors)
+            or self._colors[palette_index].transparent
+        ):
             output_color.opaque = False
             return
 
