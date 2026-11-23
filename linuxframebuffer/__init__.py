@@ -39,6 +39,7 @@ Writing to the framebuffer device needs access to it (``root``, or the
 """
 
 import atexit
+import contextlib
 import fcntl
 import mmap
 import os
@@ -177,19 +178,20 @@ class LinuxFramebuffer:
         # Taken by _swapbuffers() and deinit(), which a refresh thread and the
         # main thread may call at the same time
         self._lock = threading.Lock()
+        self._pid = os.getpid()
         try:
             self._setup(color_depth)
             self._backlight = self._find_backlight(backlight)
+            try:
+                fcntl.ioctl(self._fd, _FBIOBLANK, _FB_BLANK_UNBLANK)
+            except OSError:
+                pass
+            if console_graphics:
+                # Its warning raises with -W error
+                self._console_graphics()
         except:
             self.deinit()
             raise
-
-        try:
-            fcntl.ioctl(self._fd, _FBIOBLANK, _FB_BLANK_UNBLANK)
-        except OSError:
-            pass
-        if console_graphics:
-            self._console_graphics()
         atexit.register(self.deinit)
 
     def _setup(self, color_depth: int) -> None:
@@ -297,9 +299,17 @@ class LinuxFramebuffer:
 
     def deinit(self) -> None:
         """Release the framebuffer device and give the display back to the text console"""
-        with self._lock:
+        with self._locked():
             self._release()
         atexit.unregister(self.deinit)
+
+    def _locked(self):
+        """The lock, but not in a child forked from the process that opened the
+        framebuffer: the child inherits the lock as it was at the fork, maybe held
+        by a conversion that will not finish in the child"""
+        if os.getpid() != self._pid:
+            return contextlib.nullcontext()
+        return self._lock
 
     def _release(self) -> None:
         if self._console is not None:
@@ -353,7 +363,7 @@ class LinuxFramebuffer:
             self._areas.append((x1, y1, x2, y2))
 
     def _swapbuffers(self, dirty_row_bitmask: bytearray) -> None:
-        with self._lock:
+        with self._locked():
             self._swap(dirty_row_bitmask)
 
     def _swap(self, dirty_row_bitmask: bytearray) -> None:
