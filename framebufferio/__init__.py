@@ -48,7 +48,8 @@ and, specific to Blinka:
   ``y2`` excluded), so that a framebuffer that converts its pixels can
   convert only those areas instead of the whole dirty rows
 
-16 bit pixels are RGB565 and 32 bit pixels 0x00RRGGBB, as native integers.
+16 bit pixels are RGB565 and 32 bit pixels 0x00RRGGBB, as native integers. Color depths below 8 bits
+(pixels packed in bytes) are not supported yet.
 
 **Software and Dependencies:**
 
@@ -63,6 +64,10 @@ and, specific to Blinka:
 # as in CircuitPython
 # pylint: disable=duplicate-code
 
+import contextlib
+import os
+import sys
+import threading
 import time
 from typing import Optional
 from circuitpython_typing import WriteableBuffer
@@ -113,6 +118,13 @@ class FramebufferDisplay:
 
             # Turn off auto-refresh as we init
             self._auto_refresh = False
+            # Taken while a frame is drawn and when the display is released, which
+            # the refresh thread and the main thread may do at the same time
+            self._lock = threading.RLock()
+            self._pid = os.getpid()
+            # Counts the root group changes, which a frame being drawn must notice
+            self._root_changes = 0
+            self._refresh_error = None
             self._framebuffer = framebuffer
 
             width = framebuffer._get_width()  # pylint: disable=protected-access
@@ -121,10 +133,10 @@ class FramebufferDisplay:
             pixels_in_byte_share_row = _get(
                 framebuffer, "_get_pixels_in_byte_share_row", False
             )
-            if depth < 8 and not pixels_in_byte_share_row:
-                # Vertically packed pixels (a byte holds a column of pixels of a page
-                # of rows) are not copied into the framebuffer yet
-                raise ValueError("Vertically packed framebuffers are not supported")
+            if depth < 8:
+                # Pixels packed in bytes, by rows or by columns, are not copied
+                # into the framebuffer correctly yet
+                raise ValueError("Color depths below 8 bits are not supported")
             self._core = _DisplayCore(
                 bus=None,
                 width=width,
@@ -158,6 +170,8 @@ class FramebufferDisplay:
             self._row_stride = _get(framebuffer, "_get_row_stride", 0)
             if self._row_stride == 0:
                 self._row_stride = width * depth // 8
+            if self._row_stride < width * depth // 8:
+                raise ValueError("The row stride is shorter than a row")
 
             self._bufinfo = None
             self._get_bufinfo()
@@ -223,9 +237,19 @@ class FramebufferDisplay:
         raise AttributeError(".show(x) removed. Use .root_group = x")
 
     def _set_root_group(self, root_group: Group) -> None:
+        if root_group is not self._core.current_group:
+            self._root_changes += 1
         ok = self._core.set_root_group(root_group)
         if not ok:
             raise ValueError("Group already used")
+
+    def _locked(self):
+        """The lock of the display, but not in a child forked from the process
+        that created it: the child inherits the lock as it was at the fork, maybe
+        held by a refresh that will not finish in the child"""
+        if os.getpid() != self._pid:
+            return contextlib.nullcontext()
+        return self._lock
 
     def refresh(
         self,
@@ -286,12 +310,16 @@ class FramebufferDisplay:
         return True
 
     def _refresh_display(self) -> None:
+        with self._locked():
+            self._refresh_display_locked()
+
+    def _refresh_display_locked(self) -> None:
         if self._get_bufinfo() is None:
             return
         if not self._core.start_refresh():
             return
 
-        group = self._core.current_group
+        root_changes = self._root_changes
         try:
             areas_to_refresh = self._get_refresh_areas()
             if areas_to_refresh:
@@ -310,7 +338,7 @@ class FramebufferDisplay:
             raise
 
         self._core.finish_refresh()
-        if self._core.current_group is not group:
+        if self._root_changes != root_changes:
             # The root group changed during this frame: its full refresh, which
             # finish_refresh() cleared, is still to come
             self._core.full_refresh = True
@@ -404,14 +432,25 @@ class FramebufferDisplay:
             and (time.monotonic() * 1000 - self._core.last_refresh)
             > self._native_ms_per_frame
         ):
-            self.refresh()
+            try:
+                self.refresh()
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                # The display thread refreshes every display: keep it running. The
+                # failed refresh left a full refresh pending for the next tick.
+                message = f"{type(error).__name__}: {error}"
+                if message != self._refresh_error:
+                    print(f"Display refresh failed: {message}", file=sys.stderr)
+                self._refresh_error = message
+            else:
+                self._refresh_error = None
 
     def _release(self) -> None:
         """Release the display and free its resources"""
-        self.auto_refresh = False
-        self._core.release_display_core()
-        self._release_bufinfo()
-        self._framebuffer._deinit()  # pylint: disable=protected-access
+        with self._locked():
+            self.auto_refresh = False
+            self._core.release_display_core()
+            self._release_bufinfo()
+            self._framebuffer._deinit()  # pylint: disable=protected-access
 
     def _reset(self) -> None:
         """Reset the display"""
