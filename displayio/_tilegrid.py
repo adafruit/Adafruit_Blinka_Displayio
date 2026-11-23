@@ -76,10 +76,15 @@ def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bo
     """TileGrid._fill_area for a Bitmap of up to 8 bits per value with a Palette on a
     16 bit display: a line of the buffer at a time where the buffers allow it, else a
     pixel at a time. Returns False if a transparent pixel was left unset."""
-    if _lines_pay_off(geometry, tilegrid) and _can_fill_lines(
+    # pylint: disable=protected-access
+    # Read once: another thread may remove the TileGrid from its group meanwhile
+    scale = tilegrid._absolute_transform.scale
+    if _lines_pay_off(geometry, tilegrid, scale) and _can_fill_lines(
         buffer, mask, bitmap, geometry
     ):
-        return _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
+        return _fill_lines(
+            buffer, mask, colors, opaque, geometry, tilegrid, bitmap, scale
+        )
     return _fill_pixels_loop(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
 
 
@@ -98,19 +103,21 @@ _BIT_CHARS = b"01"
 _BYTE_MASKS = bytes.maketrans(b"01", b"\x00\xff")
 
 
-def _lines_pay_off(geometry, tilegrid) -> bool:
+def _lines_pay_off(geometry, tilegrid, scale: int) -> bool:
     """True when the area is big enough for _fill_lines to be faster than the pixel
-    loop. Measured on a Cortex-A7, a row that _fill_lines reads and a line that it
-    writes cost about as much as 8 pixels of the loop (anything from 4 to 12 gave
-    the same times): a glyph of terminalio's font is faster pixel by pixel at scale
-    1, a line at a time at scale 4."""
+    loop. Measured on a Cortex-A7, a tile segment of a row that _fill_lines reads
+    and a line that it writes cost about as much as 8 pixels of the loop (anything
+    from 4 to 12 gave the same times): a glyph of terminalio's font is faster pixel
+    by pixel at scale 1, a line at a time at scale 4, and a grid of narrow tiles
+    pixel by pixel."""
     # pylint: disable=protected-access
     x_stride, _, _, _, start_x, end_x, start_y, end_y = geometry[1:]
     width = end_x - start_x
     height = end_y - start_y
-    rows = height // tilegrid._absolute_transform.scale + 1
+    rows = height // scale + 1
+    segments = width // (tilegrid._tile_width * scale) + 2
     lines = height if abs(x_stride) == 1 else width
-    return width * height >= 8 * (rows + lines)
+    return width * height >= 8 * (rows * segments + lines)
 
 
 def _can_fill_lines(buffer, mask, bitmap, geometry) -> bool:
@@ -120,9 +127,18 @@ def _can_fill_lines(buffer, mask, bitmap, geometry) -> bool:
     # The mask words are read as one little endian int
     if sys.byteorder != "little":
         return False
-    if not isinstance(buffer, memoryview) or buffer.itemsize != 2:
+    # Contiguous buffers, which memoryview.cast() accepts
+    if (
+        not isinstance(buffer, memoryview)
+        or buffer.itemsize != 2
+        or not buffer.c_contiguous
+    ):
         return False
-    if not isinstance(mask, (memoryview, array)) or mask.itemsize != 4:
+    if (
+        not isinstance(mask, (memoryview, array))
+        or mask.itemsize != 4
+        or (isinstance(mask, memoryview) and not mask.c_contiguous)
+    ):
         return False
     if bitmap._bits_per_value < 8 and getattr(bitmap._data, "itemsize", 1) < 4:
         return False
@@ -161,11 +177,12 @@ def _bitmap_values(bitmap, tile_x: int, tile_y: int, count: int) -> bytes:
     return values
 
 
-def _row_values(tilegrid, bitmap, local_y: int, start_x: int, end_x: int) -> bytes:
-    """The bitmap values of the pixels start_x to end_x of a row of the scaled
-    TileGrid, one byte each."""
-    # pylint: disable=too-many-locals, protected-access
-    scale = tilegrid._absolute_transform.scale
+def _row_values(
+    tilegrid, bitmap, scale: int, local_y: int, start_x: int, end_x: int
+) -> bytes:
+    """The bitmap values of the pixels start_x to end_x of a row of the TileGrid
+    at the given scale, one byte each."""
+    # pylint: disable=too-many-arguments, too-many-locals, protected-access
     tile_width = tilegrid._tile_width
     tile_height = tilegrid._tile_height
     width_in_tiles = tilegrid._width_in_tiles
@@ -195,14 +212,23 @@ def _row_values(tilegrid, bitmap, local_y: int, start_x: int, end_x: int) -> byt
     values = b"".join(parts)
     if scale == 1:
         return values
-    scaled = bytearray(len(values) * scale)
+    # Only the span start_x to end_x: the first and the last value cover just
+    # the part of their scale that is in it
+    width = end_x - start_x
+    if len(values) == 1:
+        return values * width
+    head = (first + 1) * scale - start_x
+    tail = end_x - last * scale
+    middle = values[1:-1]
+    scaled = bytearray(len(middle) * scale)
     for i in range(scale):
-        scaled[i::scale] = values
-    skip = start_x - first * scale
-    return bytes(scaled[skip : skip + end_x - start_x])
+        scaled[i::scale] = middle
+    return values[:1] * head + bytes(scaled) + values[-1:] * tail
 
 
-def _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bool:
+def _fill_lines(
+    buffer, mask, colors, opaque, geometry, tilegrid, bitmap, scale: int
+) -> bool:
     # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
     # pylint: disable=too-many-statements, protected-access
     """_fill_pixels a line of the buffer at a time: the bitmap values of a line are
@@ -212,38 +238,37 @@ def _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> boo
     start_x, end_x, start_y, end_y = geometry[5:]
     width = end_x - start_x
     height = end_y - start_y
-    scale = tilegrid._absolute_transform.scale
 
-    # The values of the rows, each row once even when scaled
+    # The values of the rows, each row read once even when scaled
     row_cache = {}
-    rows = []
-    for y in range(start_y, end_y):
-        local_y = y // scale
-        row = row_cache.get(local_y)
-        if row is None:
-            row = _row_values(tilegrid, bitmap, local_y, start_x, end_x)
-            row_cache[local_y] = row
-        rows.append(row)
 
-    # Lines of the buffer with the offset of their first pixel, in buffer order
+    def row_values(y):
+        local_y = y // scale
+        values = row_cache.get(local_y)
+        if values is None:
+            values = _row_values(tilegrid, bitmap, scale, local_y, start_x, end_x)
+            row_cache[local_y] = values
+        return values
+
+    # Lines of the buffer: the offset of their first pixel in buffer order, their
+    # length, and their values, or the row and its direction for those read
+    # only if the mask leaves something to draw on the line
+    lines = []
     if abs(x_stride) == 1:
-        lines = []
-        for y, row in enumerate(rows):
-            first = start + (y + y_shift) * y_stride + x_shift * x_stride
+        for index, y in enumerate(range(start_y, end_y)):
+            first = start + (index + y_shift) * y_stride + x_shift * x_stride
             if x_stride < 0:
-                lines.append((first - width + 1, row[::-1]))
-            else:
-                lines.append((first, row))
+                first -= width - 1
+            lines.append((first, width, None, y, x_stride < 0))
     else:
-        flat = b"".join(rows)
-        lines = []
+        flat = b"".join(row_values(y) for y in range(start_y, end_y))
         for x in range(width):
             first = start + (x + x_shift) * x_stride + y_shift * y_stride
             column = flat[x::width]
             if y_stride < 0:
-                lines.append((first - height + 1, column[::-1]))
+                lines.append((first - height + 1, height, column[::-1], 0, False))
             else:
-                lines.append((first, column))
+                lines.append((first, height, column, 0, False))
 
     # Translation tables from a bitmap value to the bytes of its color
     padding = bytes(256 - len(colors))
@@ -255,14 +280,19 @@ def _fill_lines(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> boo
     full_coverage = True
     mask_bytes = memoryview(mask).cast("B")
     pixels = memoryview(buffer).cast("B")
-    for first, values in lines:
-        count = len(values)
+    for first, count, values, y, reverse in lines:
         everything = (1 << count) - 1
         word_first = first >> 5
         word_end = ((first + count - 1) >> 5) + 1
         shift = first - word_first * 32
         words = int.from_bytes(mask_bytes[word_first * 4 : word_end * 4], "little")
         drawn = (words >> shift) & everything
+        if drawn == everything:
+            continue
+        if values is None:
+            values = row_values(y)
+            if reverse:
+                values = values[::-1]
         shown = int(values.translate(opaque_bits)[::-1], 2)
         write = shown & ~drawn
         if ~shown & ~drawn & everything:
