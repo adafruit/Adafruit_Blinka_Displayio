@@ -85,7 +85,9 @@ def _fill_pixels(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bo
         return _fill_lines(
             buffer, mask, colors, opaque, geometry, tilegrid, bitmap, scale
         )
-    return _fill_pixels_loop(buffer, mask, colors, opaque, geometry, tilegrid, bitmap)
+    return _fill_pixels_loop(
+        buffer, mask, colors, opaque, geometry, tilegrid, bitmap, scale
+    )
 
 
 # The values of a byte of a 1, 2 or 4 bit Bitmap, first value in the high bits
@@ -220,6 +222,8 @@ def _row_values(
     head = (first + 1) * scale - start_x
     tail = end_x - last * scale
     middle = values[1:-1]
+    if not middle:
+        return values[:1] * head + values[-1:] * tail
     scaled = bytearray(len(middle) * scale)
     for i in range(scale):
         scaled[i::scale] = middle
@@ -320,14 +324,15 @@ def _fill_lines(
     return full_coverage
 
 
-def _fill_pixels_loop(buffer, mask, colors, opaque, geometry, tilegrid, bitmap) -> bool:
+def _fill_pixels_loop(
+    buffer, mask, colors, opaque, geometry, tilegrid, bitmap, scale: int
+) -> bool:
     # pylint: disable=too-many-arguments, too-many-locals, protected-access
     """The pixel loop of TileGrid._fill_area for a Bitmap of up to 8 bits per value
     with a Palette on a 16 bit display. Works on plain ints and flat buffers only.
     Returns False if a transparent pixel was left unset."""
     start, x_stride, y_stride, x_shift, y_shift = geometry[:5]
     start_x, end_x, start_y, end_y = geometry[5:]
-    scale = tilegrid._absolute_transform.scale
     tiles = tilegrid._tiles
     tile_width = tilegrid._tile_width
     tile_height = tilegrid._tile_height
