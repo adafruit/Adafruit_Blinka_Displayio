@@ -342,7 +342,7 @@ class EPaperDisplay:
             else:
                 refresh_done = (
                     time.monotonic() * 1000 - self._core.last_refresh
-                    > self._refresh_time
+                    > self._refresh_time_ms
                 )
 
             if refresh_done:
