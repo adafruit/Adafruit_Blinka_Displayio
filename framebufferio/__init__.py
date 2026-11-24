@@ -48,8 +48,9 @@ and, specific to Blinka:
   ``y2`` excluded), so that a framebuffer that converts its pixels can
   convert only those areas instead of the whole dirty rows
 
-16 bit pixels are RGB565 and 32 bit pixels 0x00RRGGBB, as native integers. Color depths below 8 bits
-(pixels packed in bytes) are not supported yet.
+The supported pixel formats are 16 bit RGB565 and 32 bit 0x00RRGGBB color, as
+native integers, and 8 bit grayscale. Other color depths, and pixels packed in
+bytes, are not supported yet.
 
 **Software and Dependencies:**
 
@@ -79,6 +80,11 @@ from displayio._constants import NO_COMMAND
 
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_Blinka_displayio.git"
+
+
+# The pixel formats that displayio draws correctly into a framebuffer, as
+# (color depth, grayscale): RGB565, 0x00RRGGBB and 8 bit grayscale
+_FORMATS = ((16, False), (32, False), (8, True))
 
 
 def _get(framebuffer, method: str, default):
@@ -118,10 +124,6 @@ class FramebufferDisplay:
 
             # Turn off auto-refresh as we init
             self._auto_refresh = False
-            # Taken while a frame is drawn and when the display is released, which
-            # the refresh thread and the main thread may do at the same time
-            self._lock = threading.RLock()
-            self._pid = os.getpid()
             # Counts the root group changes, which a frame being drawn must notice
             self._root_changes = 0
             self._refresh_error = None
@@ -133,10 +135,12 @@ class FramebufferDisplay:
             pixels_in_byte_share_row = _get(
                 framebuffer, "_get_pixels_in_byte_share_row", False
             )
-            if depth < 8:
-                # Pixels packed in bytes, by rows or by columns, are not copied
-                # into the framebuffer correctly yet
-                raise ValueError("Color depths below 8 bits are not supported")
+            grayscale = _get(framebuffer, "_get_grayscale", depth < 8)
+            if (depth, bool(grayscale)) not in _FORMATS:
+                raise ValueError(
+                    f"Unsupported framebuffer format: {depth} bit "
+                    f"{'grayscale' if grayscale else 'color'}"
+                )
             self._core = _DisplayCore(
                 bus=None,
                 width=width,
@@ -147,7 +151,7 @@ class FramebufferDisplay:
                 rowstart=0,
                 rotation=0,
                 color_depth=depth,
-                grayscale=_get(framebuffer, "_get_grayscale", depth < 8),
+                grayscale=grayscale,
                 pixels_in_byte_share_row=pixels_in_byte_share_row,
                 bytes_per_cell=_get(framebuffer, "_get_bytes_per_cell", 2),
                 reverse_pixels_in_byte=_get(
@@ -213,6 +217,15 @@ class FramebufferDisplay:
         )
 
         display_instance = super().__new__(cls)
+        # Inactive until __init__ is done: the display thread may see it as soon
+        # as it is allocated, and release_displays() may release it
+        display_instance._auto_refresh = False
+        display_instance._core = None
+        # Taken while a frame is drawn, the root group changes and the display is
+        # released, which the display thread and the main thread may do at the
+        # same time
+        display_instance._lock = threading.RLock()
+        display_instance._pid = os.getpid()
         allocate_display(display_instance)
         return display_instance
 
@@ -237,9 +250,12 @@ class FramebufferDisplay:
         raise AttributeError(".show(x) removed. Use .root_group = x")
 
     def _set_root_group(self, root_group: Group) -> None:
-        if root_group is not self._core.current_group:
-            self._root_changes += 1
-        ok = self._core.set_root_group(root_group)
+        # Not while a frame is drawn, which would finish with the old group's
+        # state and clear the new group's full refresh
+        with self._locked():
+            if root_group is not self._core.current_group:
+                self._root_changes += 1
+            ok = self._core.set_root_group(root_group)
         if not ok:
             raise ValueError("Group already used")
 
@@ -331,13 +347,13 @@ class FramebufferDisplay:
                 self._framebuffer._swapbuffers(  # pylint: disable=protected-access
                     dirty_row_bitmask
                 )
+            self._core.finish_refresh()
         except BaseException:
             # Redraw everything at the next refresh, which may be a retry
             self._core.full_refresh = True
             self._core.refresh_in_progress = False
             raise
 
-        self._core.finish_refresh()
         if self._root_changes != root_changes:
             # The root group changed during this frame: its full refresh, which
             # finish_refresh() cleared, is still to come
@@ -447,6 +463,9 @@ class FramebufferDisplay:
     def _release(self) -> None:
         """Release the display and free its resources"""
         with self._locked():
+            if self._core is None:
+                # Released while its constructor runs
+                return
             self.auto_refresh = False
             self._core.release_display_core()
             self._release_bufinfo()
