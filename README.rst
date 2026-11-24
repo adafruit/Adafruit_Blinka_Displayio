@@ -63,13 +63,18 @@ working directory to raise the limit.
     BLINKA_DISPLAY_LIMIT = 2
 
 Blinka Displayio reads the limit at import and applies it separately to
-displays and registered display buses. The environment variable
-``BLINKA_DISPLAY_LIMIT`` takes precedence over the file. With older versions of
-Blinka, set the environment variable before launching your program.
+displays and registered display buses. The first lookup that needs
+``settings.toml`` makes Blinka parse and cache the entire file. A syntax error
+found during that lookup raises a TOML parse error at import, even when the
+error is in an unrelated setting.
+
+Set ``BLINKA_DISPLAY_LIMIT`` in the environment before launching your program
+to bypass the file for Displayio's lookup. The environment variable also
+works with older Blinka versions. Set it to ``1`` to use the default limit.
 
 .. code-block:: shell
 
-    BLINKA_DISPLAY_LIMIT=2 python3 my_display_program.py
+    BLINKA_DISPLAY_LIMIT=1 python3 my_display_program.py
 
 The default splash can belong to one display at a time. Assign each display
 its own root group.
