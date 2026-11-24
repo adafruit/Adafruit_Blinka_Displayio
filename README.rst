@@ -51,6 +51,43 @@ To install in a virtual environment in your current project:
     source .env/bin/activate
     pip3 install adafruit-blinka-displayio
 
+Using multiple displays
+=======================
+
+Blinka Displayio allows one display by default. With Blinka 10.4.0 or newer,
+set a positive integer at the top level of ``settings.toml`` in your program's
+working directory to raise the limit.
+
+.. code-block:: toml
+
+    BLINKA_DISPLAY_LIMIT = 2
+
+Blinka Displayio reads the limit at import and applies it separately to
+displays and registered display buses. The first lookup that needs
+``settings.toml`` makes Blinka parse and cache the entire file. A syntax error
+found during that lookup raises a TOML parse error at import, even when the
+error is in an unrelated setting.
+
+Set ``BLINKA_DISPLAY_LIMIT`` in the environment before launching your program
+to bypass the file for Displayio's lookup. The environment variable also
+works with older Blinka versions. Set it to ``1`` to use the default limit.
+
+.. code-block:: shell
+
+    BLINKA_DISPLAY_LIMIT=1 python3 my_display_program.py
+
+The default splash can belong to one display at a time. Assign each display
+its own root group.
+
+Use separate bitmap and palette objects for content that changes on each
+display. A refresh can consume the pending updates on a shared bitmap or
+palette before the other display redraws.
+
+When ``BusDisplay`` instances share a hardware bus, initialize each one with
+``auto_refresh=False``. After setup, either enable automatic refresh and let
+the background worker refresh the displays, or leave automatic refresh off
+for every display on the bus and call ``refresh()`` on them one at a time.
+
 Contributing
 ============
 

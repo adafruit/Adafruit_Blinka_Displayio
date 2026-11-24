@@ -238,7 +238,8 @@ class EPaperDisplay:
         if highlight_color == 0x00 and write_color_ram_command != NO_COMMAND:
             """TODO: Clear"""
 
-        self._set_root_group(circuitpython_splash)
+        if not circuitpython_splash._in_group:  # pylint: disable=protected-access
+            self._set_root_group(circuitpython_splash)
 
     def __new__(cls, *args, **kwargs):
         from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
@@ -341,7 +342,7 @@ class EPaperDisplay:
             else:
                 refresh_done = (
                     time.monotonic() * 1000 - self._core.last_refresh
-                    > self._refresh_time
+                    > self._refresh_time_ms
                 )
 
             if refresh_done:
