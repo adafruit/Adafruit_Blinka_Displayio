@@ -118,116 +118,105 @@ class FramebufferDisplay:
             90 degree increments (0, 90, 180, 270)
         """
         # pylint: disable=too-many-statements
-        try:
-            if rotation % 90 != 0:
-                raise ValueError("Display rotation must be in 90 degree increments")
-
-            # Turn off auto-refresh as we init
-            self._auto_refresh = False
-            # Counts the root group changes, which a frame being drawn must notice
-            self._root_changes = 0
-            self._refresh_error = None
-            self._framebuffer = framebuffer
-
-            width = framebuffer._get_width()  # pylint: disable=protected-access
-            height = framebuffer._get_height()  # pylint: disable=protected-access
-            depth = _get(framebuffer, "_get_color_depth", 16)
-            pixels_in_byte_share_row = _get(
-                framebuffer, "_get_pixels_in_byte_share_row", False
-            )
-            grayscale = _get(framebuffer, "_get_grayscale", depth < 8)
-            if (depth, bool(grayscale)) not in _FORMATS:
-                raise ValueError(
-                    f"Unsupported framebuffer format: {depth} bit "
-                    f"{'grayscale' if grayscale else 'color'}"
-                )
-            self._core = _DisplayCore(
-                bus=None,
-                width=width,
-                height=height,
-                ram_width=width,
-                ram_height=height,
-                colstart=0,
-                rowstart=0,
-                rotation=0,
-                color_depth=depth,
-                grayscale=grayscale,
-                pixels_in_byte_share_row=pixels_in_byte_share_row,
-                bytes_per_cell=_get(framebuffer, "_get_bytes_per_cell", 2),
-                reverse_pixels_in_byte=_get(
-                    framebuffer, "_get_reverse_pixels_in_byte", False
-                ),
-                reverse_bytes_in_word=_get(
-                    framebuffer, "_get_reverse_pixels_in_word", False
-                ),
-                column_command=NO_COMMAND,
-                row_command=NO_COMMAND,
-                set_current_column_command=NO_COMMAND,
-                set_current_row_command=NO_COMMAND,
-                data_as_commands=False,
-                always_toggle_chip_select=False,
-                sh1107_addressing=False,
-                address_little_endian=False,
-            )
-
-            self._first_pixel_offset = _get(framebuffer, "_get_first_pixel_offset", 0)
-            self._row_stride = _get(framebuffer, "_get_row_stride", 0)
-            if self._row_stride == 0:
-                self._row_stride = width * depth // 8
-            if self._row_stride < width * depth // 8:
-                raise ValueError("The row stride is shorter than a row")
-
-            self._bufinfo = None
-            self._get_bufinfo()
-            framebuffer_size = (
-                self._first_pixel_offset
-                + self._row_stride * (height - 1)
-                + width * depth // 8
-            )
-            if self._bufinfo is None or len(self._bufinfo) < framebuffer_size:
-                raise ValueError("framebuffer is too small")
-
-            self._first_manual_refresh = not auto_refresh
-
-            self._native_frames_per_second = _get(
-                framebuffer, "_get_native_frames_per_second", 60
-            )
-            self._native_ms_per_frame = 1000 // self._native_frames_per_second
-            self._last_refresh_call = 0
-
-            if rotation != 0:
-                self.rotation = rotation
-
-            if not circuitpython_splash._in_group:  # pylint: disable=protected-access
-                self._set_root_group(circuitpython_splash)
-            self.auto_refresh = auto_refresh
-        except BaseException:
-            # __new__ allocated the display: give the slot back
-            from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
-                displays,
-            )
-
-            if self in displays:
-                displays.remove(self)
-            raise
-
-    def __new__(cls, *args, **kwargs):
         from displayio import (  # pylint: disable=import-outside-toplevel, cyclic-import
             allocate_display,
         )
 
-        display_instance = super().__new__(cls)
-        # Inactive until __init__ is done: the display thread may see it as soon
-        # as it is allocated, and release_displays() may release it
-        display_instance._auto_refresh = False
-        display_instance._core = None
         # Taken while a frame is drawn, the root group changes and the display is
         # released, which the display thread and the main thread may do at the
         # same time
-        display_instance._lock = threading.RLock()
-        display_instance._pid = os.getpid()
-        allocate_display(display_instance)
-        return display_instance
+        self._lock = threading.RLock()
+        self._pid = os.getpid()
+        if rotation % 90 != 0:
+            raise ValueError("Display rotation must be in 90 degree increments")
+
+        # Turn off auto-refresh as we init
+        self._auto_refresh = False
+        # Counts the root group changes, which a frame being drawn must notice
+        self._root_changes = 0
+        self._refresh_error = None
+        self._framebuffer = framebuffer
+
+        width = framebuffer._get_width()  # pylint: disable=protected-access
+        height = framebuffer._get_height()  # pylint: disable=protected-access
+        depth = _get(framebuffer, "_get_color_depth", 16)
+        pixels_in_byte_share_row = _get(
+            framebuffer, "_get_pixels_in_byte_share_row", False
+        )
+        grayscale = _get(framebuffer, "_get_grayscale", depth < 8)
+        if (depth, bool(grayscale)) not in _FORMATS:
+            raise ValueError(
+                f"Unsupported framebuffer format: {depth} bit "
+                f"{'grayscale' if grayscale else 'color'}"
+            )
+        self._core = _DisplayCore(
+            bus=None,
+            width=width,
+            height=height,
+            ram_width=width,
+            ram_height=height,
+            colstart=0,
+            rowstart=0,
+            rotation=0,
+            color_depth=depth,
+            grayscale=grayscale,
+            pixels_in_byte_share_row=pixels_in_byte_share_row,
+            bytes_per_cell=_get(framebuffer, "_get_bytes_per_cell", 2),
+            reverse_pixels_in_byte=_get(
+                framebuffer, "_get_reverse_pixels_in_byte", False
+            ),
+            reverse_bytes_in_word=_get(
+                framebuffer, "_get_reverse_pixels_in_word", False
+            ),
+            column_command=NO_COMMAND,
+            row_command=NO_COMMAND,
+            set_current_column_command=NO_COMMAND,
+            set_current_row_command=NO_COMMAND,
+            data_as_commands=False,
+            always_toggle_chip_select=False,
+            sh1107_addressing=False,
+            address_little_endian=False,
+        )
+
+        self._first_pixel_offset = _get(framebuffer, "_get_first_pixel_offset", 0)
+        self._row_stride = _get(framebuffer, "_get_row_stride", 0)
+        if self._row_stride == 0:
+            self._row_stride = width * depth // 8
+        if self._row_stride < width * depth // 8:
+            raise ValueError("The row stride is shorter than a row")
+
+        self._bufinfo = None
+        self._get_bufinfo()
+        framebuffer_size = (
+            self._first_pixel_offset
+            + self._row_stride * (height - 1)
+            + width * depth // 8
+        )
+        if self._bufinfo is None or len(self._bufinfo) < framebuffer_size:
+            raise ValueError("framebuffer is too small")
+
+        self._first_manual_refresh = not auto_refresh
+
+        self._native_frames_per_second = _get(
+            framebuffer, "_get_native_frames_per_second", 60
+        )
+        self._native_ms_per_frame = 1000 // self._native_frames_per_second
+        self._last_refresh_call = 0
+
+        if rotation != 0:
+            self.rotation = rotation
+
+        if not circuitpython_splash._in_group:  # pylint: disable=protected-access
+            self._set_root_group(circuitpython_splash)
+
+        # Registered once it is set up: the display thread and release_displays()
+        # only ever see complete displays
+        try:
+            allocate_display(self)
+        except BaseException:
+            self._core.release_display_core()
+            raise
+        self.auto_refresh = auto_refresh
 
     def _get_bufinfo(self) -> Optional[memoryview]:
         """The pixels of the framebuffer as bytes, None while it is not available"""
@@ -463,9 +452,6 @@ class FramebufferDisplay:
     def _release(self) -> None:
         """Release the display and free its resources"""
         with self._locked():
-            if self._core is None:
-                # Released while its constructor runs
-                return
             self.auto_refresh = False
             self._core.release_display_core()
             self._release_bufinfo()
