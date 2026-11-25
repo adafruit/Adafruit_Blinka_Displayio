@@ -64,7 +64,11 @@ def release_displays() -> None:
 
 
 def allocate_display(
-    new_display: Union["busdisplay.BusDisplay", "epaperdisplay.EPaperDisplay"]
+    new_display: Union[
+        "busdisplay.BusDisplay",
+        "epaperdisplay.EPaperDisplay",
+        "framebufferio.FramebufferDisplay",
+    ]
 ) -> None:
     """Add a display to the displays pool and return the new display"""
     if len(displays) >= CIRCUITPY_DISPLAY_LIMIT:

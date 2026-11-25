@@ -24,11 +24,11 @@ __repo__ = "https://github.com/adafruit/Adafruit_Blinka_Displayio.git"
 
 import time
 import struct
+from typing import TYPE_CHECKING
 from circuitpython_typing import WriteableBuffer, ReadableBuffer
 from paralleldisplaybus import ParallelBus
 from fourwire import FourWire
 from i2cdisplaybus import I2CDisplayBus
-from busdisplay._displaybus import _DisplayBus
 from ._group import Group
 from ._structs import ColorspaceStruct, TransformStruct
 from ._area import Area
@@ -40,6 +40,11 @@ from ._constants import (
     DISPLAY_DATA,
     NO_COMMAND,
 )
+
+if TYPE_CHECKING:
+    # Only for the annotation: busdisplay imports this module, so importing it
+    # here makes the module fail to import before busdisplay (framebufferio)
+    from busdisplay._displaybus import _DisplayBus
 
 
 class _DisplayCore:
@@ -408,7 +413,7 @@ class _DisplayCore:
         """
         return self.rotation
 
-    def get_bus(self) -> _DisplayBus:
+    def get_bus(self) -> "_DisplayBus":
         """
         The bus being used by the display. [readonly]
         """
